@@ -46,21 +46,7 @@ struct RootCoordinatorView: View {
 
     private var signedOutView: some View {
         NavigationStack {
-            ZStack {
-                AppColors.background.ignoresSafeArea()
-                VStack(spacing: AppSpacing.medium) {
-                    Image(systemName: "shield.checkered")
-                        .font(.system(size: 64))
-                        .foregroundStyle(AppColors.accent)
-
-                    Text("SpotShield")
-                        .font(AppTypography.titleLarge)
-
-                    Text("Smart Parking & Enforcement")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-            }
+            WelcomeView()
         }
     }
 
