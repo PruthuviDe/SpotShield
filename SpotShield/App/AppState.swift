@@ -7,81 +7,131 @@
 
 import SwiftUI
 import FirebaseAuth
-import FirebaseFirestore
 
 enum AuthState {
     case loading
     case signedOut
     case signedIn(UserProfile)
+    case error(String)
 }
 
+@MainActor
 @Observable
 final class AppState {
     var authState: AuthState = .loading
+
+    private let auth = Auth.auth()
+    private let authService = AuthService()
+    private let userProfileRepository = UserProfileRepository()
+
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
-    private let db = Firestore.firestore()
+    private var profileTask: Task<Void, Never>?
+    private var isCreatingAccount = false
 
     init() {
-        startListeningToAuth()
+        authListenerHandle = auth.addStateDidChangeListener { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard !self.isCreatingAccount else { return }
+                self.loadUserProfile()
+            }
+        }
     }
 
-    deinit {
+    isolated deinit {
+        profileTask?.cancel()
+
         if let handle = authListenerHandle {
             Auth.auth().removeStateDidChangeListener(handle)
         }
     }
 
-    func startListeningToAuth() {
-        authListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, firebaseUser in
-            guard let self = self else { return }
+    func loadUserProfile() {
+        profileTask?.cancel()
 
-            guard let user = firebaseUser else {
-                self.authState = .signedOut
-                return
+        guard let userId = auth.currentUser?.uid else {
+            authState = .signedOut
+            return
+        }
+
+        authState = .loading
+
+        profileTask = Task {
+            do {
+                let profile = try await userProfileRepository.getProfile(
+                    userId: userId
+                )
+
+                guard !Task.isCancelled,
+                      auth.currentUser?.uid == userId else {
+                    return
+                }
+
+                if let profile {
+                    authState = .signedIn(profile)
+                } else {
+                    authState = .error(
+                        "Your profile is missing or incomplete."
+                    )
+                }
+            } catch {
+                guard !Task.isCancelled,
+                      auth.currentUser?.uid == userId else {
+                    return
+                }
+
+                authState = .error(
+                    "We couldn't load your profile. Please try again."
+                )
             }
-
-            self.loadUserProfile(userId: user.uid)
         }
     }
 
-    func loadUserProfile(userId: String) {
-        db.collection("users").document(userId).getDocument { [weak self] snapshot, error in
-            guard let self = self else { return }
+    func createMotoristAccount(
+        name: String,
+        email: String,
+        password: String,
+        licensePlate: String = ""
+    ) async throws {
+        isCreatingAccount = true
+        profileTask?.cancel()
+        authState = .loading
 
-            if let error = error {
-                print("Error loading profile: \(error.localizedDescription)")
-                self.authState = .signedOut
-                return
-            }
+        defer {
+            isCreatingAccount = false
+        }
 
-            guard let data = snapshot?.data(),
-                  let name = data["name"] as? String,
-                  let email = data["email"] as? String,
-                  let roleString = data["role"] as? String,
-                  let role = UserRole(rawValue: roleString) else {
-                self.authState = .signedOut
-                return
-            }
-
-            let primaryVehicleId = data["primaryVehicleId"] as? String
-            let profile = UserProfile(
-                id: userId,
+        do {
+            try await authService.createMotoristAccount(
                 name: name,
                 email: email,
-                role: role,
-                primaryVehicleId: primaryVehicleId
+                password: password,
+                licensePlate: licensePlate
             )
 
-            self.authState = .signedIn(profile)
+            loadUserProfile()
+        } catch {
+            if auth.currentUser == nil {
+                authState = .signedOut
+            } else {
+                authState = .error(
+                    "Your account setup could not finish."
+                )
+            }
+
+            throw error
         }
     }
 
     func signOut() {
         do {
-            try Auth.auth().signOut()
+            try authService.signOut()
+            profileTask?.cancel()
             authState = .signedOut
         } catch {
-            print("Sign out error: \(error.localizedDescription)")
+            authState = .error(
+                "We couldn't sign you out. Please try again."
+            )
         }
     }
 }

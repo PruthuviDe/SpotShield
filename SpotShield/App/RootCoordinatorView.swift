@@ -26,6 +26,8 @@ struct RootCoordinatorView: View {
                 case .admin:
                     adminHomeView(profile: profile)
                 }
+            case .error(let message):
+                errorView(message: message)
             }
         }
     }
@@ -59,6 +61,31 @@ struct RootCoordinatorView: View {
                         .foregroundStyle(AppColors.textSecondary)
                 }
             }
+        }
+    }
+
+    private func errorView(message: String) -> some View {
+        ZStack {
+            AppColors.background.ignoresSafeArea()
+            VStack(spacing: AppSpacing.medium) {
+                Text("Account Problem")
+                    .font(AppTypography.titleMedium)
+
+                Text(message)
+                    .font(AppTypography.bodyMedium)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Try Again") {
+                    appState.loadUserProfile()
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Sign Out") {
+                    appState.signOut()
+                }
+            }
+            .padding()
         }
     }
 
