@@ -6,12 +6,21 @@
 //
 
 import SwiftUI
+import FirebaseCore
 
 @main
 struct SpotShieldApp: App {
+    @State private var appState = AppState()
+
+    init() {
+        FirebaseApp.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootCoordinatorView()
+                .environment(appState)
         }
     }
 }
+
