@@ -9,6 +9,7 @@ import SwiftUI
 
 struct RootCoordinatorView: View {
     @Environment(AppState.self) private var appState
+    @State private var showSignIn = false
 
     var body: some View {
         Group {
@@ -46,7 +47,14 @@ struct RootCoordinatorView: View {
 
     private var signedOutView: some View {
         NavigationStack {
-            WelcomeView()
+            WelcomeView(
+                onSignIn: {
+                    showSignIn = true
+                }
+            )
+            .navigationDestination(isPresented: $showSignIn) {
+                SignInView()
+            }
         }
     }
 
