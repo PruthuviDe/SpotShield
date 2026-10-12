@@ -9,6 +9,8 @@ import SwiftUI
 
 struct SignInView: View {
     @State private var viewModel = SignInViewModel()
+    var title = "Welcome back"
+    var message = "Sign in to your SpotShield account."
 
     var body: some View {
         ScrollView {
@@ -45,10 +47,10 @@ struct SignInView: View {
                 .frame(width: 80, height: 80)
                 .accessibilityHidden(true)
 
-            Text("Welcome back")
+            Text(title)
                 .font(AppTypography.titleLarge)
 
-            Text("Sign in to your SpotShield account.")
+            Text(message)
                 .font(AppTypography.bodySmall)
                 .foregroundStyle(AppColors.textSecondary)
         }

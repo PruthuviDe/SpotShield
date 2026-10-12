@@ -11,6 +11,7 @@ struct RootCoordinatorView: View {
     @Environment(AppState.self) private var appState
     @State private var showSignIn = false
     @State private var showSignUp = false
+    @State private var showStaffSignIn = false
 
     var body: some View {
         Group {
@@ -53,21 +54,31 @@ struct RootCoordinatorView: View {
                     showSignIn = true
                 },
                 onCreateAccount: {
-                                showSignUp = true
-                            }
-                        )
-                        .navigationDestination(isPresented: $showSignIn) {
-                            SignInView()
-                        }
-                        .navigationDestination(isPresented: $showSignUp) {
-                            SignUpView()
-                        }
-                    }
-                    .onDisappear {
-                        showSignIn = false
-                        showSignUp = false
-                    }
+                    showSignUp = true
+                },
+                onStaffSignIn: {
+                    showStaffSignIn = true
                 }
+            )
+            .navigationDestination(isPresented: $showSignIn) {
+                SignInView()
+            }
+            .navigationDestination(isPresented: $showSignUp) {
+                SignUpView()
+            }
+            .navigationDestination(isPresented: $showStaffSignIn) {
+                SignInView(
+                    title: "Staff sign in",
+                    message: "Sign in with your Warden or Admin account."
+                )
+            }
+        }
+        .onDisappear {
+            showSignIn = false
+            showSignUp = false
+            showStaffSignIn = false
+        }
+    }
 
     
     private func errorView(message: String) -> some View {
