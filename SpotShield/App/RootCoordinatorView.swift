@@ -10,6 +10,7 @@ import SwiftUI
 struct RootCoordinatorView: View {
     @Environment(AppState.self) private var appState
     @State private var showSignIn = false
+    @State private var showSignUp = false
 
     var body: some View {
         Group {
@@ -50,14 +51,25 @@ struct RootCoordinatorView: View {
             WelcomeView(
                 onSignIn: {
                     showSignIn = true
+                },
+                onCreateAccount: {
+                                showSignUp = true
+                            }
+                        )
+                        .navigationDestination(isPresented: $showSignIn) {
+                            SignInView()
+                        }
+                        .navigationDestination(isPresented: $showSignUp) {
+                            SignUpView()
+                        }
+                    }
+                    .onDisappear {
+                        showSignIn = false
+                        showSignUp = false
+                    }
                 }
-            )
-            .navigationDestination(isPresented: $showSignIn) {
-                SignInView()
-            }
-        }
-    }
 
+    
     private func errorView(message: String) -> some View {
         ZStack {
             AppColors.background.ignoresSafeArea()

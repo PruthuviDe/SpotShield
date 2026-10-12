@@ -95,7 +95,6 @@ final class AppState {
     ) async throws {
         isCreatingAccount = true
         profileTask?.cancel()
-        authState = .loading
 
         defer {
             isCreatingAccount = false
