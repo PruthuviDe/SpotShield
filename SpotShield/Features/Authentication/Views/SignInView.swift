@@ -11,6 +11,7 @@ struct SignInView: View {
     @State private var viewModel = SignInViewModel()
     var title = "Welcome back"
     var message = "Sign in to your SpotShield account."
+    var showWardenSignUp = false
 
     var body: some View {
         ScrollView {
@@ -26,6 +27,17 @@ struct SignInView: View {
                 }
 
                 signInButton
+
+                if showWardenSignUp {
+                    NavigationLink {
+                        WardenSignUpView()
+                    } label: {
+                        Text("Apply as a Warden")
+                            .font(AppTypography.bodyBold)
+                            .frame(minHeight: AppSpacing.minTouchTarget)
+                    }
+                    .disabled(viewModel.isLoading)
+                }
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 480)
@@ -110,11 +122,13 @@ struct SignInView: View {
                 if viewModel.isLoading {
                     ProgressView()
                         .tint(AppColors.accent)
-                }
 
-                Text(viewModel.isLoading ? "Signing in..." : "Sign In")
-                    .font(AppTypography.bodyBold)
+                    Text("Signing in...")
+                } else {
+                    Text("Sign In")
+                }
             }
+            .font(AppTypography.bodyBold)
             .foregroundStyle(AppColors.accent)
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(AppColors.buttonBackground, in: Capsule())

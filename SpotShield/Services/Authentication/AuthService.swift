@@ -11,6 +11,7 @@ import FirebaseAuth
 final class AuthService {
     private let auth = Auth.auth()
     private let userProfileRepository: UserProfileRepository
+    private let wardenRequestRepository = WardenRequestRepository()
 
     init(userProfileRepository: UserProfileRepository = UserProfileRepository()) {
         self.userProfileRepository = userProfileRepository
@@ -37,6 +38,28 @@ final class AuthService {
                 name: name,
                 email: email,
                 licensePlate: licensePlate
+            )
+        } catch {
+            try? await newAccount.user.delete()
+            throw error
+        }
+    }
+    
+    func createWardenRequest(
+        name: String,
+        email: String,
+        password: String
+    ) async throws {
+        let newAccount = try await auth.createUser(
+            withEmail: email,
+            password: password
+        )
+
+        do {
+            try await wardenRequestRepository.createRequest(
+                userId: newAccount.user.uid,
+                name: name,
+                email: email
             )
         } catch {
             try? await newAccount.user.delete()

@@ -29,6 +29,31 @@ struct RootCoordinatorView: View {
                 case .admin:
                     adminHomeView(profile: profile)
                 }
+            case .wardenRequest(let request):
+                VStack(spacing: AppSpacing.medium) {
+                    Text("Warden Application")
+                        .font(AppTypography.titleMedium)
+
+                    Text(request.status.rawValue)
+                        .font(AppTypography.bodyBold)
+
+                    Text(request.status.message)
+                        .font(AppTypography.bodyMedium)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    Button("Check Status") {
+                        appState.loadUserProfile()
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Sign Out") {
+                        appState.signOut()
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColors.background.ignoresSafeArea())
             case .error(let message):
                 errorView(message: message)
             }
@@ -69,7 +94,8 @@ struct RootCoordinatorView: View {
             .navigationDestination(isPresented: $showStaffSignIn) {
                 SignInView(
                     title: "Staff sign in",
-                    message: "Sign in with your Warden or Admin account."
+                    message: "Sign in with your Warden or Admin account.",
+                    showWardenSignUp: true
                 )
             }
         }

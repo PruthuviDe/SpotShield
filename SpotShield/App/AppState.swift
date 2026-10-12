@@ -12,6 +12,7 @@ enum AuthState {
     case loading
     case signedOut
     case signedIn(UserProfile)
+    case wardenRequest(WardenRequest)
     case error(String)
 }
 
@@ -27,6 +28,8 @@ final class AppState {
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
     private var profileTask: Task<Void, Never>?
     private var isCreatingAccount = false
+    
+    private let wardenRequestRepository = WardenRequestRepository()
 
     init() {
         authListenerHandle = auth.addStateDidChangeListener { [weak self] _, _ in
@@ -58,6 +61,7 @@ final class AppState {
 
         profileTask = Task {
             do {
+                // First, look for the user's normal profile
                 let profile = try await userProfileRepository.getProfile(
                     userId: userId
                 )
@@ -69,11 +73,33 @@ final class AppState {
 
                 if let profile {
                     authState = .signedIn(profile)
-                } else {
-                    authState = .error(
-                        "Your profile is missing or incomplete."
-                    )
+                    return
                 }
+
+                let request = try await wardenRequestRepository.getRequest(
+                    userId: userId
+                )
+
+                guard !Task.isCancelled,
+                      auth.currentUser?.uid == userId else {
+                    return
+                }
+
+                guard let request else {
+                    authState = .error(
+                        "Your account details are missing or incomplete."
+                    )
+                    return
+                }
+
+                if request.status == .approved {
+                    authState = .error(
+                        "Your request was approved, but your Warden profile is missing. Please contact Admin."
+                    )
+                    return
+                }
+
+                authState = .wardenRequest(request)
             } catch {
                 guard !Task.isCancelled,
                       auth.currentUser?.uid == userId else {
@@ -81,7 +107,7 @@ final class AppState {
                 }
 
                 authState = .error(
-                    "We couldn't load your profile. Please try again."
+                    "We couldn't load your account details. Please try again."
                 )
             }
         }
@@ -122,6 +148,42 @@ final class AppState {
         }
     }
 
+    
+    func createWardenRequest(
+        name: String,
+        email: String,
+        password: String
+    ) async throws {
+        isCreatingAccount = true
+        profileTask?.cancel()
+
+        defer {
+            isCreatingAccount = false
+        }
+
+        do {
+            try await authService.createWardenRequest(
+                name: name,
+                email: email,
+                password: password
+            )
+
+            loadUserProfile()
+        } catch {
+            if auth.currentUser == nil {
+                authState = .signedOut
+            } else {
+                authState = .error(
+                    "Your application setup could not finish."
+                )
+            }
+
+            throw error
+        }
+    }
+    
+    
+    
     func signOut() {
         do {
             try authService.signOut()
@@ -134,3 +196,4 @@ final class AppState {
         }
     }
 }
+
