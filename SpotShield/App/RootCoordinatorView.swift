@@ -12,7 +12,7 @@ struct RootCoordinatorView: View {
     @State private var showSignIn = false
     @State private var showSignUp = false
     @State private var showStaffSignIn = false
-
+    
     var body: some View {
         Group {
             switch appState.authState {
@@ -33,20 +33,20 @@ struct RootCoordinatorView: View {
                 VStack(spacing: AppSpacing.medium) {
                     Text("Warden Application")
                         .font(AppTypography.titleMedium)
-
+                    
                     Text(request.status.rawValue)
                         .font(AppTypography.bodyBold)
-
+                    
                     Text(request.status.message)
                         .font(AppTypography.bodyMedium)
                         .foregroundStyle(AppColors.textSecondary)
                         .multilineTextAlignment(.center)
-
+                    
                     Button("Check Status") {
                         appState.loadUserProfile()
                     }
                     .buttonStyle(.borderedProminent)
-
+                    
                     Button("Sign Out") {
                         appState.signOut()
                     }
@@ -59,7 +59,7 @@ struct RootCoordinatorView: View {
             }
         }
     }
-
+    
     private var loadingView: some View {
         ZStack {
             AppColors.background.ignoresSafeArea()
@@ -71,7 +71,7 @@ struct RootCoordinatorView: View {
             }
         }
     }
-
+    
     private var signedOutView: some View {
         NavigationStack {
             WelcomeView(
@@ -105,7 +105,7 @@ struct RootCoordinatorView: View {
             showStaffSignIn = false
         }
     }
-
+    
     
     private func errorView(message: String) -> some View {
         ZStack {
@@ -113,17 +113,17 @@ struct RootCoordinatorView: View {
             VStack(spacing: AppSpacing.medium) {
                 Text("Account Problem")
                     .font(AppTypography.titleMedium)
-
+                
                 Text(message)
                     .font(AppTypography.bodyMedium)
                     .foregroundStyle(AppColors.textSecondary)
                     .multilineTextAlignment(.center)
-
+                
                 Button("Try Again") {
                     appState.loadUserProfile()
                 }
                 .buttonStyle(.borderedProminent)
-
+                
                 Button("Sign Out") {
                     appState.signOut()
                 }
@@ -131,7 +131,7 @@ struct RootCoordinatorView: View {
             .padding()
         }
     }
-
+    
     private func motoristHomeView(profile: UserProfile) -> some View {
         NavigationStack {
             VStack(spacing: AppSpacing.medium) {
@@ -140,7 +140,7 @@ struct RootCoordinatorView: View {
                 Text("Driver Dashboard")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
-
+                
                 Button("Sign Out") {
                     appState.signOut()
                 }
@@ -148,7 +148,7 @@ struct RootCoordinatorView: View {
             }
         }
     }
-
+    
     private func wardenHomeView(profile: UserProfile) -> some View {
         NavigationStack {
             VStack(spacing: AppSpacing.medium) {
@@ -157,7 +157,7 @@ struct RootCoordinatorView: View {
                 Text("Parking Warden Dashboard")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
-
+                
                 Button("Sign Out") {
                     appState.signOut()
                 }
@@ -165,21 +165,30 @@ struct RootCoordinatorView: View {
             }
         }
     }
-
+    
     private func adminHomeView(profile: UserProfile) -> some View {
         NavigationStack {
             VStack(spacing: AppSpacing.medium) {
                 Text("Welcome, \(profile.name)")
                     .font(AppTypography.titleMedium)
+                
                 Text("Admin Dashboard")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
-
+                
+                NavigationLink {
+                    WardenRequestsView(adminUserId: profile.id)
+                } label: {
+                    Text("Warden Applications")
+                }
+                .buttonStyle(.borderedProminent)
+                
                 Button("Sign Out") {
                     appState.signOut()
                 }
                 .buttonStyle(.borderedProminent)
             }
+            .padding()
         }
     }
 }
