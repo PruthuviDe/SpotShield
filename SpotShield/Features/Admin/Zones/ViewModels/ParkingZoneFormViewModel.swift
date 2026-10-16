@@ -120,7 +120,8 @@ final class ParkingZoneFormViewModel {
             timeZoneId: savedZone?.timeZoneId ?? "Asia/Colombo",
             isPublished: savedZone?.isPublished ?? false,
             isActive: savedZone?.isActive ?? false,
-            policyVersion: savedZone?.policyVersion ?? 1
+            policyVersion: savedZone?.policyVersion ?? 1,
+            wardenAssignmentId: savedZone?.wardenAssignmentId
         )
 
         isSaving = true

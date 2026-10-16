@@ -21,5 +21,6 @@ struct ParkingZone: Identifiable, Codable {
     var isPublished: Bool = false
     var isActive: Bool = false
     var policyVersion: Int = 1
+    var wardenAssignmentId: String? = nil
 }
 

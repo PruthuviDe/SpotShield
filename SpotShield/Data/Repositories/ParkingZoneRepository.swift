@@ -15,7 +15,7 @@ final class ParkingZoneRepository {
         let result = try await database
             .collection("parkingZones")
             .order(by: "name")
-            .getDocuments()
+            .getDocuments(source: .server)
 
         var zones: [ParkingZone] = []
 
@@ -35,12 +35,17 @@ final class ParkingZoneRepository {
         var newZone = zone
         newZone.isPublished = false
         newZone.isActive = false
+        newZone.wardenAssignmentId = nil
         newZone.policyVersion = 1
+
+        var data = zoneDetails(zone: newZone)
+        data["isPublished"] = false
+        data["isActive"] = false
 
         try await database
             .collection("parkingZones")
             .document(newZone.id)
-            .setData(zoneData(zone: newZone))
+            .setData(data)
 
         return newZone
     }
@@ -56,12 +61,70 @@ final class ParkingZoneRepository {
         try await database
             .collection("parkingZones")
             .document(updatedZone.id)
-            .updateData(zoneData(zone: updatedZone))
+            .updateData(zoneDetails(zone: updatedZone))
 
         return updatedZone
     }
 
-    private func zoneData(zone: ParkingZone) -> [String: Any] {
+    func publishZone(
+        zone: ParkingZone,
+        assignment: WardenAssignment
+    ) async throws -> ParkingZone {
+        guard !zone.id.isEmpty else {
+            throw ParkingZoneError.missingId
+        }
+
+        guard !assignment.id.isEmpty,
+              assignment.parkingZoneId == zone.id,
+              assignment.isActive,
+              assignment.endedAt == nil else {
+            throw ParkingZoneError.invalidAssignment
+        }
+
+        var updatedZone = zone
+        updatedZone.isPublished = true
+        updatedZone.isActive = true
+        updatedZone.wardenAssignmentId = assignment.id
+        updatedZone.policyVersion += 1
+
+        let data: [String: Any] = [
+            "isPublished": true,
+            "isActive": true,
+            "wardenAssignmentId": assignment.id,
+            "policyVersion": updatedZone.policyVersion
+        ]
+
+        try await database
+            .collection("parkingZones")
+            .document(updatedZone.id)
+            .updateData(data)
+
+        return updatedZone
+    }
+
+    func deactivateZone(zone: ParkingZone) async throws -> ParkingZone {
+        guard !zone.id.isEmpty else {
+            throw ParkingZoneError.missingId
+        }
+
+        var updatedZone = zone
+        updatedZone.isActive = false
+        updatedZone.policyVersion += 1
+
+        let data: [String: Any] = [
+            "isActive": false,
+            "policyVersion": updatedZone.policyVersion
+        ]
+
+        try await database
+            .collection("parkingZones")
+            .document(updatedZone.id)
+            .updateData(data)
+
+        return updatedZone
+    }
+
+    private func zoneDetails(zone: ParkingZone) -> [String: Any] {
         [
             "name": zone.name,
             "hourlyRateLKR": zone.hourlyRateLKR,
@@ -72,8 +135,6 @@ final class ParkingZoneRepository {
             "closingHour": zone.closingHour,
             "maximumStayMinutes": zone.maximumStayMinutes,
             "timeZoneId": zone.timeZoneId,
-            "isPublished": zone.isPublished,
-            "isActive": zone.isActive,
             "policyVersion": zone.policyVersion
         ]
     }
@@ -97,6 +158,17 @@ final class ParkingZoneRepository {
             throw ParkingZoneError.missingDetails
         }
 
+        var assignmentId: String? = nil
+
+        if let savedValue = data["wardenAssignmentId"] {
+            guard let savedId = savedValue as? String,
+                  !savedId.isEmpty else {
+                throw ParkingZoneError.missingDetails
+            }
+
+            assignmentId = savedId
+        }
+
         return ParkingZone(
             id: document.documentID,
             name: name,
@@ -110,7 +182,8 @@ final class ParkingZoneRepository {
             timeZoneId: timeZoneId,
             isPublished: isPublished,
             isActive: isActive,
-            policyVersion: policyVersion
+            policyVersion: policyVersion,
+            wardenAssignmentId: assignmentId
         )
     }
 }
@@ -118,6 +191,7 @@ final class ParkingZoneRepository {
 private enum ParkingZoneError: LocalizedError {
     case missingId
     case missingDetails
+    case invalidAssignment
 
     var errorDescription: String? {
         switch self {
@@ -126,6 +200,9 @@ private enum ParkingZoneError: LocalizedError {
 
         case .missingDetails:
             return "A parking zone has missing or incorrect details."
+
+        case .invalidAssignment:
+            return "Choose an active Warden assignment for this zone."
         }
     }
 }
