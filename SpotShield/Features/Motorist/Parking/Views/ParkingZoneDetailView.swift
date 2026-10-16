@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ParkingZoneDetailView: View {
     @State private var viewModel: ParkingZoneDetailViewModel
+    @Environment(AppState.self) private var appState
 
     init(zone: ParkingZone) {
         _viewModel = State(
@@ -79,6 +80,30 @@ struct ParkingZoneDetailView: View {
             TimelineView(.periodic(from: .now, by: 1)) { clock in
                 Text(viewModel.openingStatus(at: clock.date))
                     .font(AppTypography.bodyBold)
+            }
+
+            if case .signedIn(let profile) = appState.authState {
+                if profile.role == .motorist {
+                    NavigationLink {
+                        ParkingSetupView(
+                            zone: viewModel.zone,
+                            profile: profile
+                        )
+                    } label: {
+                        Text("Check My Vehicle")
+                            .font(AppTypography.bodyBold)
+                            .frame(maxWidth: .infinity)
+                            .padding(AppSpacing.medium)
+                            .foregroundStyle(AppColors.textOnAccent)
+                            .background(
+                                AppColors.accent,
+                                in: RoundedRectangle(
+                                    cornerRadius: AppSpacing.radiusButton
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
