@@ -134,20 +134,30 @@ struct RootCoordinatorView: View {
     
     private func motoristHomeView(profile: UserProfile) -> some View {
         NavigationStack {
-            VStack(spacing: AppSpacing.medium) {
-                Text("Welcome, \(profile.name)")
-                    .font(AppTypography.titleMedium)
-                Text("Driver Dashboard")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-                
-                Button("Sign Out") {
-                    appState.signOut()
+                VStack(spacing: AppSpacing.medium) {
+                    Text("Welcome, \(profile.name)")
+                        .font(AppTypography.titleMedium)
+
+                    Text("Driver Dashboard")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+
+                    NavigationLink {
+                        MotoristParkingView()
+                    } label: {
+                        Text("Parking Zones")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Sign Out") {
+                        appState.signOut()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+                .padding(AppSpacing.large)
             }
         }
-    }
+    
     
     private func wardenHomeView(profile: UserProfile) -> some View {
         NavigationStack {

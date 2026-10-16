@@ -26,7 +26,25 @@ final class ParkingZoneRepository {
 
         return zones
     }
+    
+    func getPublishedZones() async throws -> [ParkingZone] {
+        let result = try await database
+            .collection("parkingZones")
+            .whereField("isPublished", isEqualTo: true)
+            .getDocuments(source: .server)
 
+        var zones: [ParkingZone] = []
+
+        for document in result.documents {
+            let zone = try readZone(from: document)
+            zones.append(zone)
+        }
+
+        return zones.sorted {
+            $0.name < $1.name
+        }
+    }
+    
     func createZone(zone: ParkingZone) async throws -> ParkingZone {
         guard !zone.id.isEmpty else {
             throw ParkingZoneError.missingId
