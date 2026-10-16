@@ -72,6 +72,48 @@ final class UserProfileRepository {
             .document(profile.id)
             .setData(profileData(profile), merge: true)
     }
+    
+    func getWardens() async throws -> [UserProfile] {
+        let result = try await database
+            .collection("users")
+            .whereField(
+                "role",
+                isEqualTo: UserRole.warden.rawValue
+            )
+            .getDocuments(source: .server)
+
+        var wardens: [UserProfile] = []
+
+        for document in result.documents {
+            let data = document.data()
+
+            guard let name = data["name"] as? String,
+                  let email = data["email"] as? String else {
+                throw NSError(
+                    domain: "SpotShield",
+                    code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "A Warden profile has missing or incorrect details."
+                    ]
+                )
+            }
+
+            let warden = UserProfile(
+                id: document.documentID,
+                name: name,
+                email: email,
+                role: .warden,
+                primaryVehicleId: nil
+            )
+
+            wardens.append(warden)
+        }
+
+        return wardens.sorted {
+            $0.name < $1.name
+        }
+    }
 
     func getProfile(userId: String) async throws -> UserProfile? {
         let snapshot = try await database
