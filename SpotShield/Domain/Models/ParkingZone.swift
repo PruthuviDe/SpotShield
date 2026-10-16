@@ -16,6 +16,10 @@ struct ParkingZone: Identifiable, Codable {
     var radiusMeters: Double
     var openingHour: Int
     var closingHour: Int
-    var isActive: Bool
+    var maximumStayMinutes: Int
+    var timeZoneId: String = "Asia/Colombo"
+    var isPublished: Bool = false
+    var isActive: Bool = false
+    var policyVersion: Int = 1
 }
 
