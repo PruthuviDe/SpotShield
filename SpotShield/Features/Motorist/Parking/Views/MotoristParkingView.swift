@@ -32,7 +32,12 @@ struct MotoristParkingView: View {
                 }
 
                 ForEach(viewModel.zones) { zone in
-                    zoneCard(zone: zone)
+                    NavigationLink {
+                        ParkingZoneDetailView(zone: zone)
+                    } label: {
+                        zoneCard(zone: zone)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Text("Operating hours are shown in Sri Lanka time.")
