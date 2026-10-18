@@ -149,6 +149,13 @@ struct RootCoordinatorView: View {
                     }
                     .buttonStyle(.borderedProminent)
 
+                    NavigationLink {
+                        WalletView(profile: profile)
+                    } label: {
+                        Text("Wallet")
+                    }
+                    .buttonStyle(.borderedProminent)
+
                     Button("Sign Out") {
                         appState.signOut()
                     }
