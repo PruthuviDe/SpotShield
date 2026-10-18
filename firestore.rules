@@ -412,6 +412,28 @@ service cloud.firestore {
       }
     }
 
+    match /parkingSessions/{sessionId} {
+      function canReadSession() {
+        return isMotorist()
+          && isOwner(resource.data.userId);
+      }
+
+      allow get: if canReadSession();
+
+      allow list: if canReadSession()
+        && request.query.limit != null
+        && request.query.limit > 0
+        && request.query.limit <= 50;
+
+      allow create, update, delete: if false;
+    }
+
+    match /activeParkingSessions/{userId} {
+      allow get: if isOwner(userId) && isMotorist();
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

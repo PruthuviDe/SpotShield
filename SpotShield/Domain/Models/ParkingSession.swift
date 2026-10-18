@@ -14,9 +14,17 @@ struct ParkingSession: Identifiable, Codable {
     var parkingZoneId: String
     var zoneName: String
     var licensePlate: String
+
     var startTime: Date
+    var paidUntil: Date
     var endTime: Date?
-    var totalPaidLKR: Int?
+
+    var durationMinutes: Int
+    var hourlyRateLKR: Int
+    var totalPaidLKR: Int
+    var policyVersion: Int
+
     var isActive: Bool
+    var operationId: String
 }
 
