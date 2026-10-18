@@ -105,8 +105,12 @@ struct ParkingSetupView: View {
                     Text("Estimated price")
                         .font(AppTypography.titleSmall)
 
-                    Text(price, format: .currency(code: "LKR"))
+                    Text("LKR \(price)")
                         .font(AppTypography.priceDisplay)
+
+                    Text("Prices are rounded up to the next whole rupee.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
 
                     Text("Ending parking early will not refund unused time.")
                         .font(AppTypography.bodySmall)

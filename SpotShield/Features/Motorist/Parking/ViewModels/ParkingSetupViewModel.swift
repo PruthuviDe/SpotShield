@@ -76,7 +76,7 @@ final class ParkingSetupViewModel {
     func estimatedPrice(
         zone: ParkingZone,
         at time: Date = Date()
-    ) -> Decimal? {
+    ) -> Int? {
         guard vehicle != nil,
               zone.hourlyRateLKR > 0,
               availableDurations(zone: zone, at: time)
@@ -84,10 +84,20 @@ final class ParkingSetupViewModel {
             return nil
         }
 
-        let hourlyRate = Decimal(zone.hourlyRateLKR)
-        let minutes = Decimal(selectedMinutes)
+        if selectedMinutes == 30 {
+            let halfPrice = zone.hourlyRateLKR / 2
+            let extraRupee = zone.hourlyRateLKR % 2
 
-        return hourlyRate * minutes / 60
+            return halfPrice + extraRupee
+        }
+
+        let hours = selectedMinutes / 60
+        let (price, isTooLarge) = zone.hourlyRateLKR
+            .multipliedReportingOverflow(by: hours)
+
+        guard !isTooLarge else { return nil }
+
+        return price
     }
 
     func loadVehicle() async {
