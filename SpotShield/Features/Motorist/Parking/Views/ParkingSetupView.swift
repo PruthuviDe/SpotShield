@@ -14,7 +14,6 @@ struct ParkingSetupView: View {
 
     init(zone: ParkingZone, profile: UserProfile) {
         self.zone = zone
-
         _viewModel = State(
             initialValue: ParkingSetupViewModel(profile: profile)
         )
@@ -30,23 +29,52 @@ struct ParkingSetupView: View {
                     ProgressView("Loading your vehicle...")
                 }
 
+                if viewModel.isLoadingSession {
+                    ProgressView("Checking your parking session...")
+                }
+
                 if !viewModel.errorMessage.isEmpty {
                     Text(viewModel.errorMessage)
                         .foregroundStyle(AppColors.statusOverstay)
                 }
 
-                if let vehicle = viewModel.vehicle {
-                    vehicleDetails(vehicle: vehicle)
-                    durationDetails
+                if !viewModel.sessionErrorMessage.isEmpty {
+                    Text(viewModel.sessionErrorMessage)
+                        .foregroundStyle(AppColors.statusOverstay)
                 }
 
-                Button("Refresh Vehicle") {
+                if !viewModel.parkingErrorMessage.isEmpty {
+                    Text(viewModel.parkingErrorMessage)
+                        .foregroundStyle(AppColors.statusOverstay)
+                }
+
+                if !viewModel.successMessage.isEmpty {
+                    Text(viewModel.successMessage)
+                        .foregroundStyle(AppColors.statusValid)
+                }
+
+                if let vehicle = viewModel.vehicle {
+                    vehicleDetails(vehicle: vehicle)
+
+                    if let session = viewModel.activeSession {
+                        activeSessionDetails(session: session)
+                    } else if !viewModel.isLoadingSession,
+                              viewModel.sessionErrorMessage.isEmpty {
+                        parkingDetails
+                    }
+                }
+
+                Button("Refresh") {
                     Task {
-                        await viewModel.loadVehicle()
+                        await viewModel.refresh()
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(viewModel.isLoading)
+                .disabled(
+                    viewModel.isLoading
+                    || viewModel.isLoadingSession
+                    || viewModel.isStartingParking
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
@@ -54,15 +82,14 @@ struct ParkingSetupView: View {
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .tint(AppColors.textPrimary)
         .navigationTitle("Parking Setup")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await viewModel.loadVehicle()
+            await viewModel.refresh()
         }
     }
 
-    private var durationDetails: some View {
+    private var parkingDetails: some View {
         TimelineView(.periodic(from: .now, by: 1)) { clock in
             let durations = viewModel.availableDurations(
                 zone: zone,
@@ -76,8 +103,7 @@ struct ParkingSetupView: View {
                 if durations.isEmpty {
                     Text(
                         "No parking time is available. "
-                        + "The zone may be closed, inactive, "
-                        + "or too close to closing time."
+                        + "The zone may be closed or too close to closing time."
                     )
                     .foregroundStyle(AppColors.textSecondary)
                 } else {
@@ -108,12 +134,8 @@ struct ParkingSetupView: View {
                     Text("LKR \(price)")
                         .font(AppTypography.priceDisplay)
 
-                    Text("Prices are rounded up to the next whole rupee.")
+                    Text("These are demo funds. No real money is involved.")
                         .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-
-                    Text("Ending parking early will not refund unused time.")
-                        .font(AppTypography.bodySmall)
                         .foregroundStyle(AppColors.textSecondary)
 
                     Toggle(
@@ -122,9 +144,40 @@ struct ParkingSetupView: View {
                     )
                     .tint(AppColors.statusValid)
 
-                    Text("Parking starts only after payment is confirmed.")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
+                    Button {
+                        Task {
+                            await viewModel.startParking(zone: zone)
+                        }
+                    } label: {
+                        HStack {
+                            if viewModel.isStartingParking {
+                                ProgressView()
+                                    .tint(AppColors.accent)
+                            }
+
+                            Text(
+                                viewModel.isStartingParking
+                                    ? "Starting..."
+                                    : "Start parking • LKR \(price)"
+                            )
+                            .font(AppTypography.bodyBold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(AppSpacing.medium)
+                        .background(
+                            AppColors.buttonBackground,
+                            in: RoundedRectangle(
+                                cornerRadius: AppSpacing.radiusPill
+                            )
+                        )
+                        .foregroundStyle(AppColors.accent)
+                    }
+                    .disabled(
+                        !viewModel.canStartParking(
+                            zone: zone,
+                            at: clock.date
+                        )
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,6 +206,38 @@ struct ParkingSetupView: View {
                 .font(AppTypography.titleMedium)
 
             Text("Check that this is the vehicle you are parking.")
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.medium)
+        .background(
+            AppColors.card,
+            in: RoundedRectangle(
+                cornerRadius: AppSpacing.radiusCard
+            )
+        )
+    }
+
+    private func activeSessionDetails(
+        session: ParkingSession
+    ) -> some View {
+        let paidUntil = session.paidUntil.formatted(
+            date: .abbreviated,
+            time: .shortened
+        )
+
+        return VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            Text("Parking is active")
+                .font(AppTypography.titleSmall)
+                .foregroundStyle(AppColors.statusValid)
+
+            Text(session.licensePlate)
+                .font(AppTypography.bodyBold)
+
+            Text("Paid until \(paidUntil)")
+                .foregroundStyle(AppColors.textSecondary)
+
+            Text("Paid: LKR \(session.totalPaidLKR)")
                 .foregroundStyle(AppColors.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
