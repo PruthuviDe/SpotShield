@@ -9,6 +9,7 @@ import Foundation
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseFunctions
 
 enum FirebaseConfig {
     static func configure() {
@@ -30,6 +31,10 @@ enum FirebaseConfig {
             settings.isSSLEnabled = false
             settings.cacheSettings = MemoryCacheSettings()
             database.settings = settings
+
+            let functions = Functions.functions()
+            functions.useEmulator(withHost: "127.0.0.1", port: 5001)
+
             return
         }
         #endif

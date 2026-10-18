@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import FirebaseFunctions
 
 @MainActor
 @Observable
@@ -14,8 +15,10 @@ final class WalletViewModel {
     var wallet: Wallet?
     var transactions: [WalletTransaction] = []
     var isLoading = false
+    var isAddingFunds = false
     var errorMessage = ""
     var historyErrorMessage = ""
+    var successMessage = ""
 
     private let profile: UserProfile
     private let repository = WalletRepository()
@@ -32,6 +35,7 @@ final class WalletViewModel {
         transactions = []
         errorMessage = ""
         historyErrorMessage = ""
+        successMessage = ""
 
         guard profile.role == .motorist else {
             errorMessage = "Wallets are available to Drivers only."
@@ -86,6 +90,35 @@ final class WalletViewModel {
             guard !Task.isCancelled else { return }
 
             historyErrorMessage = "Could not load your transactions. Please refresh."
+        }
+    }
+
+    func addDemoFunds() async {
+        guard !isAddingFunds, !isLoading else { return }
+
+        errorMessage = ""
+        successMessage = ""
+        isAddingFunds = true
+
+        defer {
+            isAddingFunds = false
+        }
+
+        do {
+            let function = Functions.functions().httpsCallable("topUpWallet")
+
+            _ = try await function.call([
+                "amountLKR": 1000,
+                "operationId": UUID().uuidString
+            ])
+
+            await loadWallet()
+
+            if errorMessage.isEmpty {
+                successMessage = "LKR 1,000 demo funds added."
+            }
+        } catch {
+            errorMessage = "Could not add demo funds: \(error.localizedDescription)"
         }
     }
 }

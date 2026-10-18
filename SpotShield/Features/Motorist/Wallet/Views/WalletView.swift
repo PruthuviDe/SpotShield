@@ -30,6 +30,37 @@ struct WalletView: View {
 
                 if let wallet = viewModel.wallet {
                     walletDetails(wallet: wallet)
+
+                    Button {
+                        Task {
+                            await viewModel.addDemoFunds()
+                        }
+                    } label: {
+                        HStack(spacing: AppSpacing.small) {
+                            if viewModel.isAddingFunds {
+                                ProgressView()
+                                    .tint(AppColors.accent)
+                            }
+
+                            Text(
+                                viewModel.isAddingFunds
+                                    ? "Adding demo funds..."
+                                    : "Add LKR 1,000 Demo Funds"
+                            )
+                            .font(AppTypography.bodyBold)
+                        }
+                        .foregroundStyle(AppColors.accent)
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                        .background(AppColors.buttonBackground, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isAddingFunds || viewModel.isLoading)
+
+                    if !viewModel.successMessage.isEmpty {
+                        Text(viewModel.successMessage)
+                            .foregroundStyle(AppColors.statusValid)
+                    }
+
                     transactionHistory
                 }
 

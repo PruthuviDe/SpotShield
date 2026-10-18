@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		CE1DE2BF3076234E00901F6D /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CE1DE2BE3076234E00901F6D /* FirebaseAuth */; };
 		CE1DE2C13076234E00901F6D /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CE1DE2C03076234E00901F6D /* FirebaseFirestore */; };
+		CE94DC71308499EF009855F1 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = CE94DC70308499EF009855F1 /* FirebaseFunctions */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE94DC71308499EF009855F1 /* FirebaseFunctions in Frameworks */,
 				CE1DE2BF3076234E00901F6D /* FirebaseAuth in Frameworks */,
 				CE1DE2C13076234E00901F6D /* FirebaseFirestore in Frameworks */,
 			);
@@ -40,6 +42,7 @@
 			isa = PBXGroup;
 			children = (
 				CE4B0355306E047200608E4A /* SpotShield */,
+				CE94DC6F308499EF009855F1 /* Frameworks */,
 				CE4B0354306E047200608E4A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -50,6 +53,13 @@
 				CE4B0353306E047200608E4A /* SpotShield.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CE94DC6F308499EF009855F1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -74,6 +84,7 @@
 			packageProductDependencies = (
 				CE1DE2BE3076234E00901F6D /* FirebaseAuth */,
 				CE1DE2C03076234E00901F6D /* FirebaseFirestore */,
+				CE94DC70308499EF009855F1 /* FirebaseFunctions */,
 			);
 			productName = SpotShield;
 			productReference = CE4B0353306E047200608E4A /* SpotShield.app */;
@@ -364,6 +375,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CE1DE2BD3076234E00901F6D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		CE94DC70308499EF009855F1 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CE1DE2BD3076234E00901F6D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
