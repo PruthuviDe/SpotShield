@@ -16,6 +16,7 @@ final class ParkingSetupViewModel {
     var isLoading = false
     var isLoadingSession = false
     var isStartingParking = false
+    var isEndingParking = false
     var errorMessage = ""
     var sessionErrorMessage = ""
     var parkingErrorMessage = ""
@@ -124,6 +125,7 @@ final class ParkingSetupViewModel {
               !isLoading,
               !isLoadingSession,
               !isStartingParking,
+              !isEndingParking,
               isParkedHere else {
             return false
         }
@@ -227,12 +229,22 @@ final class ParkingSetupViewModel {
     }
 
     func refresh() async {
+        guard !isStartingParking,
+              !isEndingParking,
+              !isLoading,
+              !isLoadingSession else {
+            return
+        }
+
         await loadVehicle()
         await loadActiveSession()
     }
 
     func startParking(zone: ParkingZone) async {
-        guard !isStartingParking else {
+        guard !isStartingParking,
+              !isEndingParking,
+              !isLoading,
+              !isLoadingSession else {
             return
         }
 
@@ -314,6 +326,67 @@ final class ParkingSetupViewModel {
         } catch {
             parkingErrorMessage =
                 "Could not start parking: \(error.localizedDescription)"
+        }
+    }
+
+    func endParking() async {
+        guard !isEndingParking,
+              !isStartingParking,
+              !isLoading,
+              !isLoadingSession else {
+            return
+        }
+
+        parkingErrorMessage = ""
+        successMessage = ""
+
+        guard profile.role == .motorist,
+              let session = activeSession,
+              session.userId == profile.id,
+              session.isActive else {
+            parkingErrorMessage = "No active parking session was found."
+            return
+        }
+
+        isEndingParking = true
+
+        defer {
+            isEndingParking = false
+        }
+
+        do {
+            try await sessionRepository.endParking(
+                sessionId: session.id
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            activeSession = nil
+            hasLoadedActiveSession = false
+            pendingRequestKey = ""
+            pendingOperationId = ""
+            selectedMinutes = 0
+            isParkedHere = false
+
+            await loadActiveSession()
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            successMessage =
+                "Parking ended. Your wallet balance has not changed."
+        } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
+            parkingErrorMessage =
+                "Could not confirm that parking ended. "
+                + "Refresh or try again. "
+                + error.localizedDescription
         }
     }
 }

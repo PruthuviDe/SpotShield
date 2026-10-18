@@ -432,6 +432,112 @@ exports.startParking = onCall(async (request) => {
   });
 });
 
+exports.endParking = onCall(async (request) => {
+  const userId = request.auth?.uid;
+  const sessionId = request.data?.sessionId;
+
+  if (!userId) {
+    throw new HttpsError("unauthenticated", "Please sign in first.");
+  }
+
+  if (!isValidParkingId(sessionId)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "The parking session ID is not valid."
+    );
+  }
+
+  const userRef = database.collection("users").doc(userId);
+  const sessionRef = database.collection("parkingSessions").doc(sessionId);
+  const activeSessionRef = database
+    .collection("activeParkingSessions")
+    .doc(userId);
+
+  return database.runTransaction(async (transaction) => {
+    const userDocument = await transaction.get(userRef);
+
+    if (!userDocument.exists || userDocument.get("role") !== "Motorist") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only Motorists can end parking."
+      );
+    }
+
+    const sessionDocument = await transaction.get(sessionRef);
+
+    if (!sessionDocument.exists) {
+      throw new HttpsError(
+        "not-found",
+        "The parking session could not be found."
+      );
+    }
+
+    const session = sessionDocument.data();
+
+    if (session.userId !== userId) {
+      throw new HttpsError(
+        "permission-denied",
+        "This parking session does not belong to you."
+      );
+    }
+
+    if (!(session.startTime instanceof Timestamp)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The parking start time is not valid."
+      );
+    }
+
+    if (session.isActive === false) {
+      if (
+        !(session.endTime instanceof Timestamp) ||
+        session.endTime.toMillis() < session.startTime.toMillis()
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The saved parking end time is not valid."
+        );
+      }
+
+      return { sessionId: sessionId, ended: true };
+    }
+
+    if (
+      session.isActive !== true ||
+      "endTime" in session ||
+      session.startTime.toMillis() > Timestamp.now().toMillis()
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The parking session details are not valid."
+      );
+    }
+
+    const activeDocument = await transaction.get(activeSessionRef);
+
+    if (
+      !activeDocument.exists ||
+      activeDocument.get("userId") !== userId ||
+      activeDocument.get("parkingSessionId") !== sessionId ||
+      activeDocument.get("vehicleId") !== session.vehicleId
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Your active parking record does not match. Please refresh."
+      );
+    }
+
+    transaction.update(sessionRef, {
+      isActive: false,
+      endTime: FieldValue.serverTimestamp()
+    });
+
+    transaction.delete(activeSessionRef);
+
+    return { sessionId: sessionId, ended: true };
+  });
+});
+
 function isValidParkingId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 }

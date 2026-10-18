@@ -50,6 +50,26 @@ final class ParkingSessionRepository {
         return sessionId
     }
 
+    func endParking(sessionId: String) async throws {
+        guard isValidId(sessionId) else {
+            throw ParkingSessionError.invalidSession
+        }
+
+        let result = try await functions
+            .httpsCallable("endParking")
+            .call([
+                "sessionId": sessionId
+            ])
+
+        guard let data = result.data as? [String: Any],
+              let savedSessionId = data["sessionId"] as? String,
+              savedSessionId == sessionId,
+              let ended = data["ended"] as? Bool,
+              ended else {
+            throw ParkingSessionError.invalidResponse
+        }
+    }
+
     func getActiveSession(userId: String) async throws -> ParkingSession? {
         guard isValidId(userId) else {
             throw ParkingSessionError.invalidUserId

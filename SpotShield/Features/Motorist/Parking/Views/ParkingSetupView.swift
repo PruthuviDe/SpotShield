@@ -55,13 +55,14 @@ struct ParkingSetupView: View {
 
                 if let vehicle = viewModel.vehicle {
                     vehicleDetails(vehicle: vehicle)
+                }
 
-                    if let session = viewModel.activeSession {
-                        activeSessionDetails(session: session)
-                    } else if !viewModel.isLoadingSession,
-                              viewModel.sessionErrorMessage.isEmpty {
-                        parkingDetails
-                    }
+                if let session = viewModel.activeSession {
+                    activeSessionDetails(session: session)
+                } else if viewModel.vehicle != nil,
+                          !viewModel.isLoadingSession,
+                          viewModel.sessionErrorMessage.isEmpty {
+                    parkingDetails
                 }
 
                 Button("Refresh") {
@@ -74,6 +75,7 @@ struct ParkingSetupView: View {
                     viewModel.isLoading
                     || viewModel.isLoadingSession
                     || viewModel.isStartingParking
+                    || viewModel.isEndingParking
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -227,9 +229,11 @@ struct ParkingSetupView: View {
         )
 
         return VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Parking is active")
+            Text("Open parking session")
                 .font(AppTypography.titleSmall)
-                .foregroundStyle(AppColors.statusValid)
+
+            Text(session.zoneName)
+                .font(AppTypography.bodyBold)
 
             Text(session.licensePlate)
                 .font(AppTypography.bodyBold)
@@ -239,6 +243,45 @@ struct ParkingSetupView: View {
 
             Text("Paid: LKR \(session.totalPaidLKR)")
                 .foregroundStyle(AppColors.textSecondary)
+
+            Text("Ending parking early will not refund unused time.")
+                .font(AppTypography.caption)
+                .foregroundStyle(AppColors.textSecondary)
+
+            Button {
+                Task {
+                    await viewModel.endParking()
+                }
+            } label: {
+                HStack {
+                    if viewModel.isEndingParking {
+                        ProgressView()
+                            .tint(AppColors.accent)
+                    }
+
+                    Text(
+                        viewModel.isEndingParking
+                            ? "Ending..."
+                            : "End Parking"
+                    )
+                    .font(AppTypography.bodyBold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(AppSpacing.medium)
+                .background(
+                    AppColors.buttonBackground,
+                    in: RoundedRectangle(
+                        cornerRadius: AppSpacing.radiusPill
+                    )
+                )
+                .foregroundStyle(AppColors.accent)
+            }
+            .disabled(
+                viewModel.isLoading
+                || viewModel.isLoadingSession
+                || viewModel.isStartingParking
+                || viewModel.isEndingParking
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.medium)
