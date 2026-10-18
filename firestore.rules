@@ -1,0 +1,419 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function hasRole(role) {
+      return isSignedIn()
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole("Admin");
+    }
+
+    function isWarden() {
+      return hasRole("Warden");
+    }
+
+    function isMotorist() {
+      return hasRole("Motorist");
+    }
+
+    function canReadPublishedZones() {
+      return isMotorist() || isWarden();
+    }
+
+    function validText(value, minimum, maximum) {
+      return value is string
+        && value.size() >= minimum
+        && value.size() <= maximum;
+    }
+
+    function validId(value) {
+      return validText(value, 1, 128)
+        && !value.matches(".*[/].*");
+    }
+
+    function validEmail(value) {
+      return validText(value, 3, 254)
+        && value.matches("^[^@ ]+@[^@ ]+$");
+    }
+
+    match /users/{userId} {
+      function isValidProfile() {
+        let profile = request.resource.data;
+        return profile.keys().hasAll(["name", "email", "role"])
+          && profile.keys().hasOnly([
+            "name", "email", "role", "primaryVehicleId"
+          ])
+          && validText(profile.name, 1, 100)
+          && validEmail(profile.email)
+          && profile.role in ["Motorist", "Warden"]
+          && (
+            !("primaryVehicleId" in profile)
+            || validId(profile.primaryVehicleId)
+          );
+      }
+
+      function canCreateWardenProfile() {
+        let oldRequest = get(
+          /databases/$(database)/documents/wardenRequests/$(userId)
+        ).data;
+        let savedRequest = getAfter(
+          /databases/$(database)/documents/wardenRequests/$(userId)
+        ).data;
+        let profile = request.resource.data;
+
+        return oldRequest.status == "Waiting"
+          && savedRequest.status == "Approved"
+          && savedRequest.reviewedByUserId == request.auth.uid
+          && savedRequest.reviewedAt == request.time
+          && profile.role == "Warden"
+          && profile.name == oldRequest.name
+          && profile.email == oldRequest.email
+          && profile.keys().hasOnly(["name", "email", "role"]);
+      }
+
+      allow read: if isOwner(userId)
+        || (isAdmin() && resource.data.role == "Warden");
+
+      allow create: if isValidProfile()
+        && (
+          (
+            isOwner(userId)
+            && request.resource.data.role == "Motorist"
+            && (
+              !("primaryVehicleId" in request.resource.data)
+              || getAfter(
+                /databases/$(database)/documents/vehicles/$(request.resource.data.primaryVehicleId)
+              ).data.ownerUserId == userId
+            )
+          )
+          || (isAdmin() && canCreateWardenProfile())
+        );
+
+      allow update, delete: if false;
+    }
+
+    match /vehicles/{vehicleId} {
+      function isValidVehicle() {
+        let vehicle = request.resource.data;
+        return vehicle.keys().hasAll([
+            "ownerUserId", "licensePlate", "make", "model"
+          ])
+          && vehicle.keys().hasOnly([
+            "ownerUserId", "licensePlate", "make", "model"
+          ])
+          && validId(vehicle.ownerUserId)
+          && validText(vehicle.licensePlate, 1, 32)
+          && validText(vehicle.make, 0, 80)
+          && validText(vehicle.model, 0, 80);
+      }
+
+      allow read: if isSignedIn()
+        && resource.data.ownerUserId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && isValidVehicle()
+        && request.resource.data.ownerUserId == request.auth.uid
+        && getAfter(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.primaryVehicleId == vehicleId;
+
+      allow update, delete: if false;
+    }
+
+    match /wardenRequests/{userId} {
+      function isValidRequest() {
+        let application = request.resource.data;
+        return application.keys().hasAll([
+            "name", "email", "status", "createdAt"
+          ])
+          && application.keys().hasOnly([
+            "name", "email", "status", "createdAt",
+            "reviewedByUserId", "reviewedAt"
+          ])
+          && validText(application.name, 1, 100)
+          && validEmail(application.email)
+          && application.createdAt is timestamp
+          && application.createdAt <= request.time
+          && (
+            (
+              application.status == "Waiting"
+              && application.keys().hasOnly([
+                "name", "email", "status", "createdAt"
+              ])
+            )
+            || (
+              application.status in ["Approved", "Rejected"]
+              && validId(application.reviewedByUserId)
+              && application.reviewedAt is timestamp
+              && application.reviewedAt >= application.createdAt
+              && application.reviewedAt <= request.time
+            )
+          );
+      }
+
+      allow read: if isOwner(userId) || isAdmin();
+
+      allow create: if isOwner(userId)
+        && isValidRequest()
+        && request.resource.data.status == "Waiting"
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        && isValidRequest()
+        && resource.data.status == "Waiting"
+        && !exists(
+          /databases/$(database)/documents/users/$(userId)
+        )
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            "status", "reviewedByUserId", "reviewedAt"
+          ])
+        && request.resource.data.reviewedByUserId == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && (
+          request.resource.data.status == "Rejected"
+          || (
+            request.resource.data.status == "Approved"
+            && getAfter(
+              /databases/$(database)/documents/users/$(userId)
+            ).data.role == "Warden"
+            && getAfter(
+              /databases/$(database)/documents/users/$(userId)
+            ).data.name == resource.data.name
+            && getAfter(
+              /databases/$(database)/documents/users/$(userId)
+            ).data.email == resource.data.email
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /parkingZones/{zoneId} {
+      function hasValidZoneDetails() {
+        let zone = request.resource.data;
+        return zone.keys().hasAll([
+            "name", "hourlyRateLKR", "latitude", "longitude",
+            "radiusMeters", "openingHour", "closingHour",
+            "maximumStayMinutes", "timeZoneId", "isPublished",
+            "isActive", "policyVersion"
+          ])
+          && zone.keys().hasOnly([
+            "name", "hourlyRateLKR", "latitude", "longitude",
+            "radiusMeters", "openingHour", "closingHour",
+            "maximumStayMinutes", "timeZoneId", "isPublished",
+            "isActive", "policyVersion", "wardenAssignmentId"
+          ])
+          && validText(zone.name, 1, 100)
+          && zone.hourlyRateLKR is int
+          && zone.hourlyRateLKR > 0
+          && zone.latitude is number
+          && zone.latitude >= -90 && zone.latitude <= 90
+          && zone.longitude is number
+          && zone.longitude >= -180 && zone.longitude <= 180
+          && zone.radiusMeters is number
+          && zone.radiusMeters > 0 && zone.radiusMeters <= 1000
+          && zone.openingHour is int
+          && zone.openingHour >= 0 && zone.openingHour <= 23
+          && zone.closingHour is int
+          && zone.closingHour > zone.openingHour
+          && zone.closingHour <= 24
+          && zone.maximumStayMinutes is int
+          && zone.maximumStayMinutes > 0
+          && zone.maximumStayMinutes
+            <= (zone.closingHour - zone.openingHour) * 60
+          && zone.timeZoneId == "Asia/Colombo"
+          && zone.isPublished is bool
+          && zone.isActive is bool
+          && zone.policyVersion is int
+          && zone.policyVersion > 0
+          && (
+            !("wardenAssignmentId" in zone)
+            || validId(zone.wardenAssignmentId)
+          );
+      }
+
+      function hasActiveAssignment() {
+        let zone = request.resource.data;
+        let assignment = getAfter(
+          /databases/$(database)/documents/wardenAssignments/$(zone.wardenAssignmentId)
+        ).data;
+        return assignment.parkingZoneId == zoneId
+          && assignment.isActive == true
+          && !("endedAt" in assignment)
+          && getAfter(
+            /databases/$(database)/documents/users/$(assignment.wardenUserId)
+          ).data.role == "Warden";
+      }
+
+      function hasValidZoneState() {
+        let zone = request.resource.data;
+        return (
+            zone.isPublished == false
+            && zone.isActive == false
+            && !("wardenAssignmentId" in zone)
+          )
+          || (
+            zone.isPublished == true
+            && validId(zone.wardenAssignmentId)
+            && (
+              (
+                zone.isActive == false
+                && resource.data.isPublished == true
+                && zone.wardenAssignmentId
+                  == resource.data.wardenAssignmentId
+              )
+              || hasActiveAssignment()
+            )
+          );
+      }
+
+      allow read: if isAdmin()
+        || (canReadPublishedZones() && resource.data.isPublished == true);
+
+      allow create: if isAdmin()
+        && hasValidZoneDetails()
+        && request.resource.data.isPublished == false
+        && request.resource.data.isActive == false
+        && !("wardenAssignmentId" in request.resource.data)
+        && request.resource.data.policyVersion == 1;
+
+      allow update: if isAdmin()
+        && hasValidZoneDetails()
+        && hasValidZoneState()
+        && request.resource.data.policyVersion
+          == resource.data.policyVersion + 1;
+
+      allow delete: if false;
+    }
+
+    match /wardenAssignments/{assignmentId} {
+      function isValidAssignment() {
+        let assignment = request.resource.data;
+        return assignment.keys().hasAll([
+            "parkingZoneId", "wardenUserId", "assignedByUserId",
+            "assignedAt", "isActive"
+          ])
+          && assignment.keys().hasOnly([
+            "parkingZoneId", "wardenUserId", "assignedByUserId",
+            "assignedAt", "isActive", "endedAt"
+          ])
+          && validId(assignment.parkingZoneId)
+          && validId(assignment.wardenUserId)
+          && validId(assignment.assignedByUserId)
+          && assignment.assignedAt is timestamp
+          && assignment.assignedAt <= request.time
+          && assignment.isActive is bool
+          && (
+            (assignment.isActive && !("endedAt" in assignment))
+            || (
+              !assignment.isActive
+              && assignment.endedAt is timestamp
+              && assignment.endedAt >= assignment.assignedAt
+              && assignment.endedAt <= request.time
+            )
+          );
+      }
+
+      function canEndAssignment() {
+        let zone = getAfter(
+          /databases/$(database)/documents/parkingZones/$(resource.data.parkingZoneId)
+        ).data;
+        return zone.isActive == false
+          || zone.wardenAssignmentId != assignmentId;
+      }
+
+      allow read: if isAdmin()
+        || (isWarden() && resource.data.wardenUserId == request.auth.uid);
+
+      allow create: if isAdmin()
+        && isValidAssignment()
+        && request.resource.data.assignedByUserId == request.auth.uid
+        && request.resource.data.assignedAt == request.time
+        && request.resource.data.isActive == true
+        && exists(
+          /databases/$(database)/documents/parkingZones/$(request.resource.data.parkingZoneId)
+        )
+        && get(
+          /databases/$(database)/documents/users/$(request.resource.data.wardenUserId)
+        ).data.role == "Warden";
+
+      allow update: if isAdmin()
+        && isValidAssignment()
+        && resource.data.isActive == true
+        && !("endedAt" in resource.data)
+        && request.resource.data.isActive == false
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(["isActive", "endedAt"])
+        && request.resource.data.endedAt == request.time
+        && canEndAssignment();
+
+      allow delete: if false;
+    }
+
+    match /wallets/{userId} {
+      function isValidWallet() {
+        let wallet = request.resource.data;
+        return wallet.keys().hasAll([
+            "userId", "balanceLKR", "autoDeductEnabled"
+          ])
+          && wallet.keys().hasOnly([
+            "userId", "balanceLKR", "autoDeductEnabled"
+          ])
+          && validId(wallet.userId)
+          && wallet.userId == userId
+          && wallet.balanceLKR is int
+          && wallet.balanceLKR == 0
+          && wallet.autoDeductEnabled is bool
+          && wallet.autoDeductEnabled == false;
+      }
+
+      allow get: if isOwner(userId) && isMotorist();
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && isMotorist()
+        && isValidWallet();
+
+      allow update, delete: if false;
+
+      match /transactions/{transactionId} {
+        function canReadTransactions() {
+          return isOwner(userId)
+            && isMotorist()
+            && exists(
+              /databases/$(database)/documents/wallets/$(userId)
+            );
+        }
+
+        allow get: if canReadTransactions();
+
+        allow list: if canReadTransactions()
+          && request.query.limit != null
+          && request.query.limit > 0
+          && request.query.limit <= 50;
+
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

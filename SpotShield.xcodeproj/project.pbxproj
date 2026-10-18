@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 110;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -26,10 +26,12 @@
 /* Begin PBXFrameworksBuildPhase section */
 		CE4B0350306E047200608E4A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 				CE1DE2BF3076234E00901F6D /* FirebaseAuth in Frameworks */,
 				CE1DE2C13076234E00901F6D /* FirebaseFirestore in Frameworks */,
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -62,6 +64,8 @@
 				CE4B0351306E047200608E4A /* Resources */,
 			);
 			buildRules = (
+			);
+			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
 				CE4B0355306E047200608E4A /* SpotShield */,
@@ -115,21 +119,25 @@
 /* Begin PBXResourcesBuildPhase section */
 		CE4B0351306E047200608E4A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		CE4B034F306E047200608E4A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		CE4B035C306E047200608E4A /* Debug configuration for PBXProject "SpotShield" */ = {
+		CE4B035C306E047200608E4A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -192,7 +200,7 @@
 			};
 			name = Debug;
 		};
-		CE4B035D306E047200608E4A /* Release configuration for PBXProject "SpotShield" */ = {
+		CE4B035D306E047200608E4A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -248,7 +256,7 @@
 			};
 			name = Release;
 		};
-		CE4B035F306E047200608E4A /* Debug configuration for PBXNativeTarget "SpotShield" */ = {
+		CE4B035F306E047200608E4A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -280,7 +288,7 @@
 			};
 			name = Debug;
 		};
-		CE4B0360306E047200608E4A /* Release configuration for PBXNativeTarget "SpotShield" */ = {
+		CE4B0360306E047200608E4A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -318,17 +326,19 @@
 		CE4B034E306E047200608E4A /* Build configuration list for PBXProject "SpotShield" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				CE4B035C306E047200608E4A /* Debug configuration for PBXProject "SpotShield" */,
-				CE4B035D306E047200608E4A /* Release configuration for PBXProject "SpotShield" */,
+				CE4B035C306E047200608E4A /* Debug */,
+				CE4B035D306E047200608E4A /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		CE4B035E306E047200608E4A /* Build configuration list for PBXNativeTarget "SpotShield" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				CE4B035F306E047200608E4A /* Debug configuration for PBXNativeTarget "SpotShield" */,
-				CE4B0360306E047200608E4A /* Release configuration for PBXNativeTarget "SpotShield" */,
+				CE4B035F306E047200608E4A /* Debug */,
+				CE4B0360306E047200608E4A /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
@@ -358,5 +368,4 @@
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CE4B034B306E047200608E4A /* Project object */;
-	validationLevel = 1;
 }

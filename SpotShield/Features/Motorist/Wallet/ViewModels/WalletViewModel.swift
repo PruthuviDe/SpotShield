@@ -12,11 +12,14 @@ import Observation
 @Observable
 final class WalletViewModel {
     var wallet: Wallet?
+    var transactions: [WalletTransaction] = []
     var isLoading = false
     var errorMessage = ""
+    var historyErrorMessage = ""
 
     private let profile: UserProfile
     private let repository = WalletRepository()
+    private let transactionRepository = WalletTransactionRepository()
 
     init(profile: UserProfile) {
         self.profile = profile
@@ -26,7 +29,9 @@ final class WalletViewModel {
         guard !isLoading, !Task.isCancelled else { return }
 
         wallet = nil
+        transactions = []
         errorMessage = ""
+        historyErrorMessage = ""
 
         guard profile.role == .motorist else {
             errorMessage = "Wallets are available to Drivers only."
@@ -58,10 +63,29 @@ final class WalletViewModel {
             }
 
             wallet = savedWallet
+
+            await loadTransactions()
         } catch {
             guard !Task.isCancelled else { return }
 
             errorMessage = "Could not load your wallet. Please try again."
+        }
+    }
+
+    private func loadTransactions() async {
+        guard !Task.isCancelled else { return }
+
+        do {
+            let savedTransactions = try await transactionRepository
+                .getTransactions(userId: profile.id)
+
+            guard !Task.isCancelled else { return }
+
+            transactions = savedTransactions
+        } catch {
+            guard !Task.isCancelled else { return }
+
+            historyErrorMessage = "Could not load your transactions. Please refresh."
         }
     }
 }

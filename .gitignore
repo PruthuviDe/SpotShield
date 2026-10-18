@@ -1,1 +1,6 @@
 Documents/
+node_modules/
+.firebase/
+*-debug.log
+*-debug.*.log
+emulator-data/

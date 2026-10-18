@@ -6,14 +6,14 @@
 //
 
 import SwiftUI
-import FirebaseCore
 
 @main
 struct SpotShieldApp: App {
-    @State private var appState = AppState()
+    @State private var appState: AppState
 
     init() {
-        FirebaseApp.configure()
+        FirebaseConfig.configure()
+        _appState = State(initialValue: AppState())
     }
 
     var body: some Scene {
