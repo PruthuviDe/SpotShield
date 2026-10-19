@@ -155,6 +155,13 @@ struct RootCoordinatorView: View {
                         Text("Wallet")
                     }
                     .buttonStyle(.borderedProminent)
+                    
+                    NavigationLink {
+                        ParkingHistoryView(profile: profile)
+                    } label: {
+                        Text("Parking History")
+                    }
+                    .buttonStyle(.borderedProminent)
 
                     Button("Sign Out") {
                         appState.signOut()

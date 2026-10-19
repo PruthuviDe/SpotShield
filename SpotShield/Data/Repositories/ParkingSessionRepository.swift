@@ -70,6 +70,57 @@ final class ParkingSessionRepository {
         }
     }
 
+    func getHistory(userId: String) async throws -> [ParkingSession] {
+        guard isValidId(userId) else {
+            throw ParkingSessionError.invalidUserId
+        }
+
+        let result = try await database
+            .collection("parkingSessions")
+            .whereField("userId", isEqualTo: userId)
+            .whereField("isActive", isEqualTo: false)
+            .order(by: "startTime", descending: true)
+            .limit(to: 50)
+            .getDocuments(source: .server)
+
+        var sessions: [ParkingSession] = []
+
+        for document in result.documents {
+            var data = document.data()
+            data["id"] = document.documentID
+
+            let session = try Firestore.Decoder().decode(
+                ParkingSession.self,
+                from: data
+            )
+
+            guard session.userId == userId,
+                  !session.isActive,
+                  let endTime = session.endTime,
+                  endTime >= session.startTime,
+                  session.paidUntil > session.startTime,
+                  isValidId(session.vehicleId),
+                  isValidId(session.parkingZoneId),
+                  isValidId(session.operationId),
+                  !session.zoneName.trimmingCharacters(
+                      in: .whitespacesAndNewlines
+                  ).isEmpty,
+                  !session.licensePlate.trimmingCharacters(
+                      in: .whitespacesAndNewlines
+                  ).isEmpty,
+                  session.durationMinutes > 0,
+                  session.hourlyRateLKR > 0,
+                  session.totalPaidLKR > 0,
+                  session.policyVersion > 0 else {
+                throw ParkingSessionError.invalidSession
+            }
+
+            sessions.append(session)
+        }
+
+        return sessions
+    }
+    
     func getActiveSession(userId: String) async throws -> ParkingSession? {
         guard isValidId(userId) else {
             throw ParkingSessionError.invalidUserId
