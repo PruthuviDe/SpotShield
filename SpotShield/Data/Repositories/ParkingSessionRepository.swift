@@ -50,6 +50,36 @@ final class ParkingSessionRepository {
         return sessionId
     }
 
+    func extendParking(
+        sessionId: String,
+        additionalMinutes: Int,
+        expectedDurationMinutes: Int,
+        operationId: String
+    ) async throws -> Int {
+        guard isValidId(sessionId),
+              isValidId(operationId),
+              [30, 60, 120].contains(additionalMinutes),
+              expectedDurationMinutes > 0 else {
+            throw ParkingSessionError.invalidParkingDetails
+        }
+
+        let result = try await functions.httpsCallable("extendParking").call([
+            "sessionId": sessionId,
+            "additionalMinutes": additionalMinutes,
+            "expectedDurationMinutes": expectedDurationMinutes,
+            "operationId": operationId
+        ])
+
+        guard let data = result.data as? [String: Any],
+              data["sessionId"] as? String == sessionId,
+              let amountLKR = data["amountLKR"] as? Int,
+              amountLKR > 0 else {
+            throw ParkingSessionError.invalidResponse
+        }
+
+        return amountLKR
+    }
+
     func endParking(sessionId: String) async throws {
         guard isValidId(sessionId) else {
             throw ParkingSessionError.invalidSession
@@ -86,32 +116,9 @@ final class ParkingSessionRepository {
         var sessions: [ParkingSession] = []
 
         for document in result.documents {
-            var data = document.data()
-            data["id"] = document.documentID
+            let session = try readSession(document: document, userId: userId)
 
-            let session = try Firestore.Decoder().decode(
-                ParkingSession.self,
-                from: data
-            )
-
-            guard session.userId == userId,
-                  !session.isActive,
-                  let endTime = session.endTime,
-                  endTime >= session.startTime,
-                  session.paidUntil > session.startTime,
-                  isValidId(session.vehicleId),
-                  isValidId(session.parkingZoneId),
-                  isValidId(session.operationId),
-                  !session.zoneName.trimmingCharacters(
-                      in: .whitespacesAndNewlines
-                  ).isEmpty,
-                  !session.licensePlate.trimmingCharacters(
-                      in: .whitespacesAndNewlines
-                  ).isEmpty,
-                  session.durationMinutes > 0,
-                  session.hourlyRateLKR > 0,
-                  session.totalPaidLKR > 0,
-                  session.policyVersion > 0 else {
+            guard !session.isActive, session.endTime != nil else {
                 throw ParkingSessionError.invalidSession
             }
 
@@ -176,6 +183,13 @@ final class ParkingSessionRepository {
             return nil
         }
 
+        return try readSession(document: document, userId: userId)
+    }
+
+    private func readSession(
+        document: DocumentSnapshot,
+        userId: String
+    ) throws -> ParkingSession {
         guard var data = document.data() else {
             throw ParkingSessionError.invalidSession
         }
@@ -188,16 +202,10 @@ final class ParkingSessionRepository {
         )
 
         guard session.userId == userId,
-              isValidId(session.vehicleId),
-              isValidId(session.parkingZoneId),
-              isValidId(session.operationId),
-              !session.zoneName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !session.licensePlate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               session.paidUntil > session.startTime,
               session.durationMinutes > 0,
               session.hourlyRateLKR > 0,
-              session.totalPaidLKR > 0,
-              session.policyVersion > 0 else {
+              session.totalPaidLKR > 0 else {
             throw ParkingSessionError.invalidSession
         }
 
@@ -226,7 +234,7 @@ private enum ParkingSessionError: LocalizedError {
         case .invalidUserId:
             return "Your user ID is missing or incorrect."
         case .invalidParkingDetails:
-            return "Choose your parking time and confirm that you are parked here."
+            return "Please check the selected parking time and details."
         case .invalidResponse:
             return "Could not confirm the parking result. Please refresh your parking session."
         case .invalidSession:

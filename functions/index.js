@@ -193,15 +193,12 @@ exports.startParking = onCall(async (request) => {
 
     if (paymentDocument.exists) {
       const savedSessionId = paymentDocument.get("parkingSessionId");
-      const savedSessionRef = isValidParkingId(savedSessionId)
-        ? database.collection("parkingSessions").doc(savedSessionId)
-        : null;
 
       if (
         paymentDocument.get("userId") !== userId ||
         paymentDocument.get("type") !== "Parking Payment" ||
         paymentDocument.get("operationId") !== operationId ||
-        savedSessionRef === null
+        !isValidParkingId(savedSessionId)
       ) {
         throw new HttpsError(
           "already-exists",
@@ -209,18 +206,38 @@ exports.startParking = onCall(async (request) => {
         );
       }
 
+      const savedSessionRef = database
+        .collection("parkingSessions")
+        .doc(savedSessionId);
       const savedSessionDocument = await transaction.get(savedSessionRef);
+
+      if (!savedSessionDocument.exists) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The original parking session could not be found."
+        );
+      }
+
       const savedSession = savedSessionDocument.data();
+      const originalMinutes =
+        paymentDocument.get("durationMinutes") ?? savedSession.durationMinutes;
+      const originalPriceLKR = parkingPrice(
+        savedSession.hourlyRateLKR,
+        durationMinutes
+      );
 
       if (
-        !savedSessionDocument.exists ||
         savedSession.userId !== userId ||
         savedSession.parkingZoneId !== parkingZoneId ||
         savedSession.vehicleId !== vehicleId ||
-        savedSession.durationMinutes !== durationMinutes ||
         savedSession.policyVersion !== policyVersion ||
         savedSession.operationId !== operationId ||
-        paymentDocument.get("amountLKR") !== savedSession.totalPaidLKR
+        originalMinutes !== durationMinutes ||
+        !Number.isSafeInteger(savedSession.hourlyRateLKR) ||
+        savedSession.hourlyRateLKR <= 0 ||
+        !Number.isSafeInteger(originalPriceLKR) ||
+        originalPriceLKR <= 0 ||
+        paymentDocument.get("amountLKR") !== originalPriceLKR
       ) {
         throw new HttpsError(
           "already-exists",
@@ -301,53 +318,14 @@ exports.startParking = onCall(async (request) => {
       );
     }
 
-    const assignmentRef = database
-      .collection("wardenAssignments")
-      .doc(zone.wardenAssignmentId);
-    const assignmentDocument = await transaction.get(assignmentRef);
-    const assignment = assignmentDocument.data();
-
-    if (
-      !assignmentDocument.exists ||
-      assignment.parkingZoneId !== parkingZoneId ||
-      assignment.isActive !== true ||
-      "endedAt" in assignment ||
-      !isValidParkingId(assignment.wardenUserId)
-    ) {
-      throw new HttpsError(
-        "failed-precondition",
-        "This zone needs an active Warden."
-      );
-    }
-
-    const wardenRef = database.collection("users").doc(assignment.wardenUserId);
-    const wardenDocument = await transaction.get(wardenRef);
-
-    if (!wardenDocument.exists || wardenDocument.get("role") !== "Warden") {
-      throw new HttpsError(
-        "failed-precondition",
-        "This zone needs an approved Warden."
-      );
-    }
+    await checkWardenCoverage(transaction, parkingZoneId, zone.wardenAssignmentId);
 
     const startDate = new Date();
-    const localTime = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Asia/Colombo",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23"
-    }).format(startDate);
-    const [hour, minute, second] = localTime.split(":").map(Number);
-    const currentSeconds =
-      hour * 3600 +
-      minute * 60 +
-      second +
-      startDate.getMilliseconds() / 1000;
+    const hours = parkingHours(startDate, zone.openingHour, zone.closingHour, zone.timeZoneId);
 
     if (
-      currentSeconds < zone.openingHour * 3600 ||
-      currentSeconds + durationMinutes * 60 > zone.closingHour * 3600
+      startDate.getTime() < hours.openingTimeMillis ||
+      startDate.getTime() + durationMinutes * 60000 > hours.closingTimeMillis
     ) {
       throw new HttpsError(
         "failed-precondition",
@@ -355,17 +333,7 @@ exports.startParking = onCall(async (request) => {
       );
     }
 
-    const priceLKR =
-      durationMinutes === 30
-        ? Math.ceil(zone.hourlyRateLKR / 2)
-        : zone.hourlyRateLKR * (durationMinutes / 60);
-
-    if (!Number.isSafeInteger(priceLKR) || priceLKR <= 0) {
-      throw new HttpsError(
-        "failed-precondition",
-        "The parking price is not valid."
-      );
-    }
+    const priceLKR = parkingPrice(zone.hourlyRateLKR, durationMinutes);
 
     if (
       !walletDocument.exists ||
@@ -409,13 +377,18 @@ exports.startParking = onCall(async (request) => {
       policyVersion: zone.policyVersion,
       totalPaidLKR: priceLKR,
       isActive: true,
-      operationId: operationId
+      operationId: operationId,
+      maximumStayMinutes: zone.maximumStayMinutes,
+      openingHour: zone.openingHour,
+      closingHour: zone.closingHour,
+      timeZoneId: zone.timeZoneId
     });
 
     transaction.create(paymentRef, {
       userId: userId,
       type: "Parking Payment",
       amountLKR: priceLKR,
+      durationMinutes: durationMinutes,
       balanceAfterLKR: newBalance,
       createdAt: FieldValue.serverTimestamp(),
       operationId: operationId,
@@ -537,6 +510,390 @@ exports.endParking = onCall(async (request) => {
     return { sessionId: sessionId, ended: true };
   });
 });
+
+exports.extendParking = onCall(async (request) => {
+  const userId = request.auth?.uid;
+  const sessionId = request.data?.sessionId;
+  const additionalMinutes = request.data?.additionalMinutes;
+  const expectedDurationMinutes = request.data?.expectedDurationMinutes;
+  const operationId = request.data?.operationId;
+
+  if (!userId) {
+    throw new HttpsError("unauthenticated", "Please sign in first.");
+  }
+
+  if (
+    !isValidParkingId(sessionId) ||
+    !isValidParkingId(operationId) ||
+    ![30, 60, 120].includes(additionalMinutes) ||
+    !Number.isSafeInteger(expectedDurationMinutes) ||
+    expectedDurationMinutes <= 0
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "The parking extension details are not valid."
+    );
+  }
+
+  const userRef = database.collection("users").doc(userId);
+  const sessionRef = database.collection("parkingSessions").doc(sessionId);
+  const activeSessionRef = database
+    .collection("activeParkingSessions")
+    .doc(userId);
+  const walletRef = database.collection("wallets").doc(userId);
+  const paymentRef = walletRef.collection("transactions").doc(operationId);
+
+  return database.runTransaction(async (transaction) => {
+    const userDocument = await transaction.get(userRef);
+
+    if (!userDocument.exists || userDocument.get("role") !== "Motorist") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only Motorists can extend parking."
+      );
+    }
+
+    const sessionDocument = await transaction.get(sessionRef);
+
+    if (!sessionDocument.exists) {
+      throw new HttpsError(
+        "not-found",
+        "The parking session could not be found."
+      );
+    }
+
+    const session = sessionDocument.data();
+
+    if (session.userId !== userId) {
+      throw new HttpsError(
+        "permission-denied",
+        "This parking session does not belong to you."
+      );
+    }
+
+    const previousPayment = await transaction.get(paymentRef);
+
+    if (previousPayment.exists) {
+      const previousAmount = previousPayment.get("amountLKR");
+
+      if (
+        previousPayment.get("userId") !== userId ||
+        previousPayment.get("type") !== "Parking Extension" ||
+        previousPayment.get("parkingSessionId") !== sessionId ||
+        previousPayment.get("operationId") !== operationId ||
+        previousPayment.get("additionalMinutes") !== additionalMinutes ||
+        previousPayment.get("previousDurationMinutes")
+          !== expectedDurationMinutes ||
+        !Number.isSafeInteger(previousAmount) ||
+        previousAmount <= 0
+      ) {
+        throw new HttpsError(
+          "already-exists",
+          "This operation ID was already used."
+        );
+      }
+
+      return { sessionId: sessionId, amountLKR: previousAmount };
+    }
+
+    if (session.isActive !== true || "endTime" in session) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This parking session has ended."
+      );
+    }
+
+    if (
+      !(session.startTime instanceof Timestamp) ||
+      !(session.paidUntil instanceof Timestamp) ||
+      !isValidParkingId(session.vehicleId) ||
+      !isValidParkingId(session.parkingZoneId) ||
+      !isValidParkingId(session.operationId) ||
+      !Number.isSafeInteger(session.durationMinutes) ||
+      session.durationMinutes <= 0 ||
+      !Number.isSafeInteger(session.hourlyRateLKR) ||
+      session.hourlyRateLKR <= 0 ||
+      !Number.isSafeInteger(session.totalPaidLKR) ||
+      session.totalPaidLKR <= 0
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The saved parking details are not valid."
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(session.maximumStayMinutes) ||
+      session.maximumStayMinutes <= 0 ||
+      !Number.isInteger(session.openingHour) ||
+      session.openingHour < 0 ||
+      session.openingHour > 23 ||
+      !Number.isInteger(session.closingHour) ||
+      session.closingHour <= session.openingHour ||
+      session.closingHour > 24 ||
+      session.maximumStayMinutes
+        > (session.closingHour - session.openingHour) * 60 ||
+      session.timeZoneId !== "Asia/Colombo"
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This session has no valid saved time limits. "
+          + "Please end it and start a new session."
+      );
+    }
+
+    if (session.durationMinutes !== expectedDurationMinutes) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Your parking time changed. Refresh before extending."
+      );
+    }
+
+    const startMillis = session.startTime.toMillis();
+    const paidUntilMillis = session.paidUntil.toMillis();
+
+    if (
+      paidUntilMillis - startMillis !== session.durationMinutes * 60000
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The saved parking duration does not match its times."
+      );
+    }
+
+    const newDurationMinutes = session.durationMinutes + additionalMinutes;
+
+    if (
+      !Number.isSafeInteger(newDurationMinutes) ||
+      newDurationMinutes > session.maximumStayMinutes
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This extension would exceed the maximum parking time."
+      );
+    }
+
+    const activeDocument = await transaction.get(activeSessionRef);
+
+    if (
+      !activeDocument.exists ||
+      activeDocument.get("userId") !== userId ||
+      activeDocument.get("parkingSessionId") !== sessionId ||
+      activeDocument.get("vehicleId") !== session.vehicleId
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Your active parking record does not match. Please refresh."
+      );
+    }
+
+    const originalPaymentRef = walletRef
+      .collection("transactions")
+      .doc(session.operationId);
+    const originalPayment = await transaction.get(originalPaymentRef);
+    const originalMinutes = originalPayment.get("durationMinutes");
+
+    if (
+      !originalPayment.exists ||
+      originalPayment.get("userId") !== userId ||
+      originalPayment.get("type") !== "Parking Payment" ||
+      originalPayment.get("parkingSessionId") !== sessionId ||
+      originalPayment.get("operationId") !== session.operationId ||
+      ![30, 60, 120].includes(originalMinutes) ||
+      originalMinutes > session.durationMinutes
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The original payment details are missing. "
+          + "Please end this session and start a new one."
+      );
+    }
+
+    const originalPriceLKR = parkingPrice(session.hourlyRateLKR, originalMinutes);
+
+    if (
+      !Number.isSafeInteger(originalPriceLKR) ||
+      originalPriceLKR <= 0 ||
+      originalPayment.get("amountLKR") !== originalPriceLKR
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The original parking payment is not valid."
+      );
+    }
+
+    const zoneRef = database
+      .collection("parkingZones")
+      .doc(session.parkingZoneId);
+    const zoneDocument = await transaction.get(zoneRef);
+
+    if (
+      !zoneDocument.exists ||
+      zoneDocument.get("isPublished") !== true ||
+      zoneDocument.get("isActive") !== true ||
+      !isValidParkingId(zoneDocument.get("wardenAssignmentId"))
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This zone is not available for extensions."
+      );
+    }
+
+    await checkWardenCoverage(
+      transaction,
+      session.parkingZoneId,
+      zoneDocument.get("wardenAssignmentId")
+    );
+
+    const hours = parkingHours(
+      session.startTime.toDate(),
+      session.openingHour,
+      session.closingHour,
+      session.timeZoneId
+    );
+    const newPaidUntilMillis = paidUntilMillis + additionalMinutes * 60000;
+
+    if (
+      startMillis < hours.openingTimeMillis ||
+      newPaidUntilMillis > hours.closingTimeMillis
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This extension would go past the accepted opening hours."
+      );
+    }
+
+    const priceLKR = parkingPrice(session.hourlyRateLKR, additionalMinutes);
+    const newTotalPaidLKR = session.totalPaidLKR + priceLKR;
+
+    if (
+      !Number.isSafeInteger(priceLKR) ||
+      priceLKR <= 0 ||
+      !Number.isSafeInteger(newTotalPaidLKR)
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The extension price is not valid."
+      );
+    }
+
+    const walletDocument = await transaction.get(walletRef);
+
+    if (
+      !walletDocument.exists ||
+      walletDocument.get("userId") !== userId ||
+      !Number.isSafeInteger(walletDocument.get("balanceLKR")) ||
+      walletDocument.get("balanceLKR") < 0
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Your demo wallet details are not valid."
+      );
+    }
+
+    const currentBalance = walletDocument.get("balanceLKR");
+
+    if (currentBalance < priceLKR) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Your demo wallet does not have enough funds."
+      );
+    }
+
+    const nowMillis = Date.now();
+
+    if (startMillis > nowMillis || paidUntilMillis <= nowMillis) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Parking has expired or its start time is invalid. "
+          + "Refresh your session before continuing."
+      );
+    }
+
+    const newBalance = currentBalance - priceLKR;
+    const newPaidUntil = Timestamp.fromMillis(newPaidUntilMillis);
+
+    transaction.update(walletRef, {
+      balanceLKR: newBalance
+    });
+
+    transaction.update(sessionRef, {
+      durationMinutes: newDurationMinutes,
+      paidUntil: newPaidUntil,
+      totalPaidLKR: newTotalPaidLKR
+    });
+
+    transaction.create(paymentRef, {
+      userId: userId,
+      type: "Parking Extension",
+      amountLKR: priceLKR,
+      additionalMinutes: additionalMinutes,
+      previousDurationMinutes: session.durationMinutes,
+      balanceAfterLKR: newBalance,
+      createdAt: FieldValue.serverTimestamp(),
+      operationId: operationId,
+      parkingSessionId: sessionId,
+      paidUntilBefore: session.paidUntil,
+      paidUntilAfter: newPaidUntil
+    });
+
+    return { sessionId: sessionId, amountLKR: priceLKR };
+  });
+});
+
+function parkingPrice(hourlyRateLKR, minutes) {
+  const price = minutes === 30
+    ? Math.ceil(hourlyRateLKR / 2)
+    : hourlyRateLKR * (minutes / 60);
+
+  if (!Number.isSafeInteger(price) || price <= 0) {
+    throw new HttpsError("failed-precondition", "The parking price is not valid.");
+  }
+
+  return price;
+}
+
+function parkingHours(date, openingHour, closingHour, timeZoneId) {
+  const localTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timeZoneId,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).format(date);
+  const [hour, minute, second] = localTime.split(":").map(Number);
+  const secondsSinceMidnight = hour * 3600 + minute * 60 + second;
+  const midnightMillis = date.getTime()
+    - secondsSinceMidnight * 1000 - date.getMilliseconds();
+
+  return {
+    openingTimeMillis: midnightMillis + openingHour * 3600000,
+    closingTimeMillis: midnightMillis + closingHour * 3600000
+  };
+}
+
+async function checkWardenCoverage(transaction, zoneId, assignmentId) {
+  const assignmentRef = database.collection("wardenAssignments").doc(assignmentId);
+  const assignmentDocument = await transaction.get(assignmentRef);
+  const assignment = assignmentDocument.data();
+
+  if (
+    !assignmentDocument.exists ||
+    assignment.parkingZoneId !== zoneId ||
+    assignment.isActive !== true ||
+    "endedAt" in assignment ||
+    !isValidParkingId(assignment.wardenUserId)
+  ) {
+    throw new HttpsError("failed-precondition", "This zone needs an active Warden.");
+  }
+
+  const wardenRef = database.collection("users").doc(assignment.wardenUserId);
+  const wardenDocument = await transaction.get(wardenRef);
+
+  if (!wardenDocument.exists || wardenDocument.get("role") !== "Warden") {
+    throw new HttpsError("failed-precondition", "This zone needs an approved Warden.");
+  }
+}
 
 function isValidParkingId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);

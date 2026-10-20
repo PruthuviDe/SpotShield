@@ -26,5 +26,10 @@ struct ParkingSession: Identifiable, Codable {
 
     var isActive: Bool
     var operationId: String
+
+    var maximumStayMinutes: Int? = nil
+    var openingHour: Int? = nil
+    var closingHour: Int? = nil
+    var timeZoneId: String? = nil
 }
 

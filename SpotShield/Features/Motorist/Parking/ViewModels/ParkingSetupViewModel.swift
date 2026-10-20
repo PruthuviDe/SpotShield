@@ -17,11 +17,13 @@ final class ParkingSetupViewModel {
     var isLoadingSession = false
     var isStartingParking = false
     var isEndingParking = false
+    var isExtendingParking = false
     var errorMessage = ""
     var sessionErrorMessage = ""
     var parkingErrorMessage = ""
     var successMessage = ""
     var selectedMinutes = 0
+    var selectedExtensionMinutes = 0
     var isParkedHere = false
 
     private let profile: UserProfile
@@ -36,6 +38,11 @@ final class ParkingSetupViewModel {
         self.profile = profile
     }
 
+    var isBusy: Bool {
+        isLoading || isLoadingSession || isStartingParking
+            || isEndingParking || isExtendingParking
+    }
+
     func availableDurations(
         zone: ParkingZone,
         at time: Date = Date()
@@ -46,6 +53,11 @@ final class ParkingSetupViewModel {
               zone.openingHour <= 23,
               zone.closingHour > zone.openingHour,
               zone.closingHour <= 24,
+              let closingTime = closingTime(
+                on: time,
+                hour: zone.closingHour,
+                timeZoneId: zone.timeZoneId
+              ),
               let timeZone = TimeZone(identifier: zone.timeZoneId) else {
             return []
         }
@@ -57,16 +69,6 @@ final class ParkingSetupViewModel {
 
         guard currentHour >= zone.openingHour,
               currentHour < zone.closingHour else {
-            return []
-        }
-
-        let startOfDay = calendar.startOfDay(for: time)
-
-        guard let closingTime = calendar.date(
-            byAdding: .hour,
-            value: zone.closingHour,
-            to: startOfDay
-        ) else {
             return []
         }
 
@@ -97,21 +99,7 @@ final class ParkingSetupViewModel {
             return nil
         }
 
-        if selectedMinutes == 30 {
-            let halfPrice = zone.hourlyRateLKR / 2
-            let extraRupee = zone.hourlyRateLKR % 2
-            return halfPrice + extraRupee
-        }
-
-        let hours = selectedMinutes / 60
-        let (price, isTooLarge) = zone.hourlyRateLKR
-            .multipliedReportingOverflow(by: hours)
-
-        guard !isTooLarge else {
-            return nil
-        }
-
-        return price
+        return parkingPrice(rate: zone.hourlyRateLKR, minutes: selectedMinutes)
     }
 
     func canStartParking(
@@ -122,15 +110,64 @@ final class ParkingSetupViewModel {
               vehicle?.ownerUserId == profile.id,
               hasLoadedActiveSession,
               activeSession == nil,
-              !isLoading,
-              !isLoadingSession,
-              !isStartingParking,
-              !isEndingParking,
+              !isBusy,
               isParkedHere else {
             return false
         }
 
         return estimatedPrice(zone: zone, at: time) != nil
+    }
+
+    func extensionDurations(at time: Date = Date()) -> [Int] {
+        guard let session = activeSession,
+              session.isActive,
+              session.startTime <= time,
+              session.paidUntil > time,
+              let maximumMinutes = session.maximumStayMinutes,
+              let closingHour = session.closingHour,
+              let timeZoneId = session.timeZoneId,
+              let closingTime = closingTime(
+                on: session.startTime,
+                hour: closingHour,
+                timeZoneId: timeZoneId
+              ) else {
+            return []
+        }
+
+        var durations: [Int] = []
+
+        for minutes in [30, 60, 120] {
+            let newEndTime = session.paidUntil.addingTimeInterval(
+                TimeInterval(minutes * 60)
+            )
+
+            if minutes <= maximumMinutes - session.durationMinutes,
+               newEndTime <= closingTime {
+                durations.append(minutes)
+            }
+        }
+
+        return durations
+    }
+
+    func extensionPrice(at time: Date = Date()) -> Int? {
+        guard let session = activeSession,
+              extensionDurations(at: time).contains(selectedExtensionMinutes) else {
+            return nil
+        }
+
+        return parkingPrice(
+            rate: session.hourlyRateLKR,
+            minutes: selectedExtensionMinutes
+        )
+    }
+
+    func canExtendParking(at time: Date = Date()) -> Bool {
+        profile.role == .motorist
+            && activeSession?.userId == profile.id
+            && hasLoadedActiveSession
+            && !isBusy
+            && extensionPrice(at: time) != nil
     }
 
     func loadVehicle() async {
@@ -209,7 +246,7 @@ final class ParkingSetupViewModel {
         }
 
         do {
-            activeSession = try await sessionRepository.getActiveSession(
+            let savedSession = try await sessionRepository.getActiveSession(
                 userId: profile.id
             )
 
@@ -217,6 +254,12 @@ final class ParkingSetupViewModel {
                 return
             }
 
+            if savedSession?.id != activeSession?.id
+                || savedSession?.durationMinutes != activeSession?.durationMinutes {
+                selectedExtensionMinutes = 0
+            }
+
+            activeSession = savedSession
             hasLoadedActiveSession = true
         } catch {
             guard !Task.isCancelled else {
@@ -229,10 +272,7 @@ final class ParkingSetupViewModel {
     }
 
     func refresh() async {
-        guard !isStartingParking,
-              !isEndingParking,
-              !isLoading,
-              !isLoadingSession else {
+        guard !isBusy else {
             return
         }
 
@@ -241,10 +281,7 @@ final class ParkingSetupViewModel {
     }
 
     func startParking(zone: ParkingZone) async {
-        guard !isStartingParking,
-              !isEndingParking,
-              !isLoading,
-              !isLoadingSession else {
+        guard !isBusy else {
             return
         }
 
@@ -283,16 +320,14 @@ final class ParkingSetupViewModel {
         }
 
         let requestKey = [
+            "start",
             zone.id,
             vehicle.id,
             String(selectedMinutes),
             String(zone.policyVersion)
         ].joined(separator: "|")
 
-        if pendingRequestKey != requestKey {
-            pendingRequestKey = requestKey
-            pendingOperationId = UUID().uuidString
-        }
+        let requestId = operationId(for: requestKey)
 
         isStartingParking = true
 
@@ -307,7 +342,7 @@ final class ParkingSetupViewModel {
                 durationMinutes: selectedMinutes,
                 policyVersion: zone.policyVersion,
                 isParkedHere: isParkedHere,
-                operationId: pendingOperationId
+                operationId: requestId
             )
 
             guard let savedSession = try await sessionRepository.getSession(
@@ -320,6 +355,7 @@ final class ParkingSetupViewModel {
             }
 
             activeSession = savedSession
+            selectedExtensionMinutes = 0
             pendingRequestKey = ""
             pendingOperationId = ""
             successMessage = "Parking started. LKR \(price) paid from your demo wallet."
@@ -330,10 +366,7 @@ final class ParkingSetupViewModel {
     }
 
     func endParking() async {
-        guard !isEndingParking,
-              !isStartingParking,
-              !isLoading,
-              !isLoadingSession else {
+        guard !isBusy else {
             return
         }
 
@@ -368,6 +401,7 @@ final class ParkingSetupViewModel {
             pendingRequestKey = ""
             pendingOperationId = ""
             selectedMinutes = 0
+            selectedExtensionMinutes = 0
             isParkedHere = false
 
             await loadActiveSession()
@@ -388,5 +422,108 @@ final class ParkingSetupViewModel {
                 + "Refresh or try again. "
                 + error.localizedDescription
         }
+    }
+
+    func extendParking() async {
+        guard !isBusy else {
+            return
+        }
+
+        parkingErrorMessage = ""
+        successMessage = ""
+
+        guard canExtendParking(), let session = activeSession else {
+            parkingErrorMessage = "Choose an available extension time."
+            return
+        }
+
+        let minutes = selectedExtensionMinutes
+        let requestKey = [
+            "extend",
+            session.id,
+            String(session.durationMinutes),
+            String(minutes)
+        ].joined(separator: "|")
+        let requestId = operationId(for: requestKey)
+
+        isExtendingParking = true
+
+        defer {
+            isExtendingParking = false
+        }
+
+        do {
+            let amountLKR = try await sessionRepository.extendParking(
+                sessionId: session.id,
+                additionalMinutes: minutes,
+                expectedDurationMinutes: session.durationMinutes,
+                operationId: requestId
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            activeSession = nil
+            selectedExtensionMinutes = 0
+            pendingRequestKey = ""
+            pendingOperationId = ""
+
+            await loadActiveSession()
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            successMessage = "Parking extended. LKR \(amountLKR) paid from your demo wallet."
+        } catch {
+            guard !Task.isCancelled else {
+                return
+            }
+
+            parkingErrorMessage = "Could not confirm the extension: \(error.localizedDescription)"
+            await loadActiveSession()
+        }
+    }
+
+    private func operationId(for requestKey: String) -> String {
+        if pendingRequestKey != requestKey {
+            pendingRequestKey = requestKey
+            pendingOperationId = UUID().uuidString
+        }
+
+        return pendingOperationId
+    }
+
+    private func parkingPrice(rate: Int, minutes: Int) -> Int? {
+        guard rate > 0, [30, 60, 120].contains(minutes) else {
+            return nil
+        }
+
+        if minutes == 30 {
+            return rate / 2 + rate % 2
+        }
+
+        let (price, overflow) = rate.multipliedReportingOverflow(by: minutes / 60)
+        return overflow ? nil : price
+    }
+
+    private func closingTime(
+        on date: Date,
+        hour: Int,
+        timeZoneId: String
+    ) -> Date? {
+        guard (1...24).contains(hour),
+              let timeZone = TimeZone(identifier: timeZoneId) else {
+            return nil
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar.date(
+            byAdding: .hour,
+            value: hour,
+            to: calendar.startOfDay(for: date)
+        )
     }
 }

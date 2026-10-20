@@ -11,6 +11,8 @@ struct ParkingSetupView: View {
     let zone: ParkingZone
 
     @State private var viewModel: ParkingSetupViewModel
+    @State private var isShowingEndConfirmation = false
+    @State private var sessionToEndId = ""
 
     init(zone: ParkingZone, profile: UserProfile) {
         self.zone = zone
@@ -71,12 +73,7 @@ struct ParkingSetupView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(
-                    viewModel.isLoading
-                    || viewModel.isLoadingSession
-                    || viewModel.isStartingParking
-                    || viewModel.isEndingParking
-                )
+                .disabled(viewModel.isBusy)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
@@ -88,6 +85,23 @@ struct ParkingSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.refresh()
+        }
+        .confirmationDialog(
+            "End parking? Unused time will not be refunded.",
+            isPresented: $isShowingEndConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("End Parking", role: .destructive) {
+                Task {
+                    guard viewModel.activeSession?.id == sessionToEndId else {
+                        viewModel.parkingErrorMessage =
+                            "Your parking session changed. Refresh and check it before ending."
+                        return
+                    }
+                    await viewModel.endParking()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -146,33 +160,15 @@ struct ParkingSetupView: View {
                     )
                     .tint(AppColors.statusValid)
 
-                    Button {
+                    actionButton(
+                        viewModel.isStartingParking
+                            ? "Starting..."
+                            : "Start parking • LKR \(price)",
+                        isLoading: viewModel.isStartingParking
+                    ) {
                         Task {
                             await viewModel.startParking(zone: zone)
                         }
-                    } label: {
-                        HStack {
-                            if viewModel.isStartingParking {
-                                ProgressView()
-                                    .tint(AppColors.accent)
-                            }
-
-                            Text(
-                                viewModel.isStartingParking
-                                    ? "Starting..."
-                                    : "Start parking • LKR \(price)"
-                            )
-                            .font(AppTypography.bodyBold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(AppSpacing.medium)
-                        .background(
-                            AppColors.buttonBackground,
-                            in: RoundedRectangle(
-                                cornerRadius: AppSpacing.radiusPill
-                            )
-                        )
-                        .foregroundStyle(AppColors.accent)
                     }
                     .disabled(
                         !viewModel.canStartParking(
@@ -190,8 +186,10 @@ struct ParkingSetupView: View {
                     cornerRadius: AppSpacing.radiusCard
                 )
             )
+            .disabled(viewModel.isBusy)
             .onChange(of: durations) { _, newDurations in
-                if !newDurations.contains(viewModel.selectedMinutes) {
+                if !viewModel.isBusy,
+                   !newDurations.contains(viewModel.selectedMinutes) {
                     viewModel.selectedMinutes = 0
                     viewModel.isParkedHere = false
                 }
@@ -223,73 +221,134 @@ struct ParkingSetupView: View {
     private func activeSessionDetails(
         session: ParkingSession
     ) -> some View {
-        let paidUntil = session.paidUntil.formatted(
-            date: .abbreviated,
-            time: .shortened
-        )
+        TimelineView(.periodic(from: .now, by: 1)) { clock in
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                Text(session.paidUntil > clock.date
+                     ? "Parking is active" : "Paid time has expired")
+                    .font(AppTypography.titleSmall)
+                    .foregroundStyle(session.paidUntil > clock.date
+                                     ? AppColors.statusValid : AppColors.statusOverstay)
 
-        return VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Open parking session")
-                .font(AppTypography.titleSmall)
-
-            Text(session.zoneName)
-                .font(AppTypography.bodyBold)
-
-            Text(session.licensePlate)
-                .font(AppTypography.bodyBold)
-
-            Text("Paid until \(paidUntil)")
-                .foregroundStyle(AppColors.textSecondary)
-
-            Text("Paid: LKR \(session.totalPaidLKR)")
-                .foregroundStyle(AppColors.textSecondary)
-
-            Text("Ending parking early will not refund unused time.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
-
-            Button {
-                Task {
-                    await viewModel.endParking()
-                }
-            } label: {
-                HStack {
-                    if viewModel.isEndingParking {
-                        ProgressView()
-                            .tint(AppColors.accent)
-                    }
-
-                    Text(
-                        viewModel.isEndingParking
-                            ? "Ending..."
-                            : "End Parking"
-                    )
+                Text(session.zoneName)
                     .font(AppTypography.bodyBold)
+
+                Text(session.licensePlate)
+                    .font(AppTypography.bodyBold)
+
+                Text("Paid until \(formattedDate(session.paidUntil))")
+                    .foregroundStyle(AppColors.textSecondary)
+
+                Text("Paid: LKR \(session.totalPaidLKR)")
+                    .foregroundStyle(AppColors.textSecondary)
+
+                Divider()
+                extensionDetails(at: clock.date)
+                Divider()
+
+                Text("Ending parking early will not refund unused time.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+
+                actionButton(
+                    viewModel.isEndingParking ? "Ending..." : "End Parking",
+                    isLoading: viewModel.isEndingParking
+                ) {
+                    sessionToEndId = session.id
+                    isShowingEndConfirmation = true
                 }
-                .frame(maxWidth: .infinity)
-                .padding(AppSpacing.medium)
-                .background(
-                    AppColors.buttonBackground,
-                    in: RoundedRectangle(
-                        cornerRadius: AppSpacing.radiusPill
-                    )
-                )
-                .foregroundStyle(AppColors.accent)
+                .disabled(viewModel.isBusy)
             }
-            .disabled(
-                viewModel.isLoading
-                || viewModel.isLoadingSession
-                || viewModel.isStartingParking
-                || viewModel.isEndingParking
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.medium)
+            .background(
+                AppColors.card,
+                in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
             )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
+    }
+
+    private func extensionDetails(at time: Date) -> some View {
+        let durations = viewModel.extensionDurations(at: time)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            Text("Extend parking")
+                .font(AppTypography.titleSmall)
+
+            if durations.isEmpty {
+                Text("No extra time is available within this session's limits.")
+                    .foregroundStyle(AppColors.textSecondary)
+            } else {
+                Picker("Add parking time", selection: $viewModel.selectedExtensionMinutes) {
+                    Text("Choose extra time").tag(0)
+                    ForEach(durations, id: \.self) { minutes in
+                        Text("\(minutes) minutes").tag(minutes)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if let price = viewModel.extensionPrice(at: time),
+                   let session = viewModel.activeSession {
+                    let newEndTime = session.paidUntil.addingTimeInterval(
+                        TimeInterval(viewModel.selectedExtensionMinutes * 60)
+                    )
+
+                    Text("Extension price: LKR \(price)")
+                        .font(AppTypography.bodyBold)
+                    Text("New paid until: \(formattedDate(newEndTime))")
+                        .foregroundStyle(AppColors.textSecondary)
+                    Text("Extra time starts from your current paid-until time.")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+
+                    actionButton(
+                        viewModel.isExtendingParking
+                            ? "Extending..." : "Extend parking • LKR \(price)",
+                        isLoading: viewModel.isExtendingParking
+                    ) {
+                        Task {
+                            await viewModel.extendParking()
+                        }
+                    }
+                    .disabled(!viewModel.canExtendParking(at: time))
+                }
+            }
+        }
+        .disabled(viewModel.isBusy)
+        .onChange(of: durations) { _, newDurations in
+            if !viewModel.isBusy,
+               !newDurations.contains(viewModel.selectedExtensionMinutes) {
+                viewModel.selectedExtensionMinutes = 0
+            }
+        }
+    }
+
+    private func actionButton(
+        _ title: String,
+        isLoading: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack {
+                if isLoading {
+                    ProgressView().tint(AppColors.accent)
+                }
+                Text(title).font(AppTypography.bodyBold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(AppSpacing.medium)
+            .background(
+                AppColors.buttonBackground,
+                in: RoundedRectangle(cornerRadius: AppSpacing.radiusPill)
             )
-        )
+            .foregroundStyle(AppColors.accent)
+        }
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.timeZone = TimeZone(identifier: "Asia/Colombo")
+        return formatter.string(from: date)
     }
 }
