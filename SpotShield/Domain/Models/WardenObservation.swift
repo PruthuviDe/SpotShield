@@ -26,5 +26,6 @@ struct WardenObservation: Identifiable, Codable {
     var parkingStatus: String
     var ticketId: String?
     var decisionReason: String? = nil
+    var ticketPaymentStatus: String? = nil
 }
     

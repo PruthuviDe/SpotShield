@@ -886,3 +886,7 @@ exports.getReviewedWardenObservations = enforcement.getReviewedWardenObservation
 exports.getObservationReview = enforcement.getObservationReview;
 exports.reviewWardenObservation = enforcement.reviewWardenObservation;
 exports.getMyTickets = enforcement.getMyTickets;
+
+const ticketPayments = require("./ticketPayments");
+exports.setTicketAutoDeduct = ticketPayments.setTicketAutoDeduct;
+exports.payTicket = ticketPayments.payTicket;

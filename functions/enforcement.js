@@ -4,6 +4,7 @@ const {
   isValidParkingId, normalizePlate, plateKey, readPlateVehicle,
   readPlateSessions, parkingHours, checkWardenCoverage
 } = require("./parkingHelpers");
+const { ticketFineLKR, ticketPaymentRefFor } = require("./ticketPayments");
 const database = getFirestore();
 
 async function requireRole(transaction, userId, role) {
@@ -94,7 +95,16 @@ exports.getPendingWardenObservations = onCall(async request => {
 exports.getReviewedWardenObservations = onCall(async request => {
   await database.runTransaction(transaction => requireRole(transaction, request.auth?.uid, "Admin"));
   const result = await database.collection("wardenObservations").where("reviewStatus", "in", ["Ticket Issued", "Dismissed"]).get();
-  return { observations: observationRows(result) };
+  const observations = observationRows(result);
+  const rows = await Promise.all(observations.map(async observation => {
+    if (!observation.ticketId) return observation;
+    const ticket = await database.collection("simulatedTickets").doc(observation.ticketId).get();
+    return {
+      ...observation,
+      ticketPaymentStatus: ticket.exists ? ticket.get("paymentStatus") ?? "" : ""
+    };
+  }));
+  return { observations: rows };
 });
 
 exports.getObservationReview = onCall(async request => {
@@ -155,28 +165,73 @@ exports.reviewWardenObservation = onCall(async request => {
       if (restriction) throw new HttpsError("failed-precondition", restriction);
       const registryRef = database.collection("vehiclePlates").doc(plateKey(observation.licensePlate));
       const registry = await transaction.get(registryRef);
+      const existingTicket = await transaction.get(ticketRef);
+      const ownerUserId = check.ownerUserId ?? "";
+      const walletRef = ownerUserId ? database.collection("wallets").doc(ownerUserId) : null;
+      const wallet = walletRef ? await transaction.get(walletRef) : null;
+      const paymentRef = ownerUserId ? ticketPaymentRefFor(ownerUserId, id) : null;
+      const previousPayment = paymentRef ? await transaction.get(paymentRef) : null;
+      if (existingTicket.exists || previousPayment?.exists) {
+        throw new HttpsError("failed-precondition", "A ticket or payment record already exists for this observation.");
+      }
+      let paymentStatus = "Due";
+      let paymentMessage = ownerUserId
+        ? "Auto-deduction is off. Pay from your demo wallet when ready."
+        : "No Motorist account is linked. This ticket cannot be paid from a wallet.";
+      let newBalanceLKR = null;
+      if (ownerUserId && wallet?.exists) {
+        if (wallet.get("userId") !== ownerUserId) {
+          paymentMessage = "The wallet could not be verified. This ticket remains due.";
+        } else if (wallet.get("autoDeductEnabled") === true) {
+          const balanceLKR = wallet.get("balanceLKR");
+          if (!Number.isSafeInteger(balanceLKR) || balanceLKR < 0) {
+            paymentMessage = "The wallet balance could not be verified. This ticket remains due.";
+          } else if (balanceLKR < ticketFineLKR) {
+            paymentMessage = "Not enough demo funds. This ticket remains due.";
+          } else {
+            paymentStatus = "Paid";
+            paymentMessage = "Automatically paid from your demo wallet.";
+            newBalanceLKR = balanceLKR - ticketFineLKR;
+          }
+        }
+      } else if (ownerUserId && !wallet?.exists) {
+        paymentMessage = "No wallet was found. Create one before paying this ticket.";
+      }
       if (!registry.exists) {
         transaction.create(registryRef, {
-          ownerUserId: check.ownerUserId ?? "",
+          ownerUserId: ownerUserId,
           vehicleId: check.vehicleId ?? "",
           licensePlate: observation.licensePlate
         });
       }
       transaction.create(ticketRef, {
         observationId: id,
-        userId: check.ownerUserId ?? "",
+        userId: ownerUserId,
         parkingZoneId: observation.parkingZoneId,
         zoneName: check.zone.name,
         licensePlate: observation.licensePlate,
-        fineAmountLKR: 1000,
+        fineAmountLKR: ticketFineLKR,
         issuedAt: FieldValue.serverTimestamp(),
         issuedByAdminUserId: request.auth.uid,
         reason: reason,
-        paymentStatus: "Due",
+        paymentStatus: paymentStatus,
+        paymentMessage: paymentMessage,
         decisionParkingStatus: check.status,
         checkedAt: Timestamp.fromMillis(check.checkedAtMillis),
         policyVersion: check.zone.policyVersion
       });
+      if (newBalanceLKR !== null) {
+        transaction.update(walletRef, { balanceLKR: newBalanceLKR });
+        transaction.create(paymentRef, {
+          userId: ownerUserId,
+          type: "Ticket Payment",
+          amountLKR: ticketFineLKR,
+          balanceAfterLKR: newBalanceLKR,
+          createdAt: FieldValue.serverTimestamp(),
+          operationId: paymentRef.id,
+          ticketId: id
+        });
+      }
       decision.ticketId = ticketRef.id;
       decision.decisionParkingStatus = check.status;
       decision.decisionCheckedAt = Timestamp.fromMillis(check.checkedAtMillis);

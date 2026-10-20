@@ -107,12 +107,25 @@ final class WalletRepository {
 
         defaults.removeObject(forKey: operationKey)
     }
+
+    func setTicketAutoDeduct(enabled: Bool) async throws {
+        let result = try await Functions.functions()
+            .httpsCallable("setTicketAutoDeduct")
+            .call(["enabled": enabled])
+
+        guard let data = result.data as? [String: Any],
+              let savedEnabled = data["enabled"] as? Bool,
+              savedEnabled == enabled else {
+            throw WalletError.invalidAutoDeductResponse
+        }
+    }
 }
 
 private enum WalletError: LocalizedError {
     case invalidUserId
     case invalidDetails
     case invalidTopUpResponse
+    case invalidAutoDeductResponse
 
     var errorDescription: String? {
         switch self {
@@ -122,6 +135,8 @@ private enum WalletError: LocalizedError {
             return "Your wallet details are missing or incorrect."
         case .invalidTopUpResponse:
             return "The top-up response could not be confirmed. Please try again."
+        case .invalidAutoDeductResponse:
+            return "The wallet setting could not be confirmed. Refresh and try again."
         }
     }
 }

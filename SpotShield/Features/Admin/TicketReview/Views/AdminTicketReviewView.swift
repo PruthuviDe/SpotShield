@@ -86,6 +86,12 @@ struct AdminTicketReviewView: View {
                 Text("Demo ticket: \(ticketId)")
                     .font(AppTypography.caption)
             }
+            if viewModel.showReviewed,
+               let paymentStatus = observation.ticketPaymentStatus,
+               !paymentStatus.isEmpty {
+                Text("Ticket payment: \(paymentStatus)")
+                    .font(AppTypography.bodyBold)
+            }
             if observation.reviewStatus == .awaitingReview {
                 Button("Dismiss Observation") {
                     viewModel.prepareReview(observation, issueTicket: false)

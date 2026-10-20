@@ -15,6 +15,7 @@ final class WalletViewModel {
     var transactions: [WalletTransaction] = []
     var isLoading = false
     var isAddingFunds = false
+    var isUpdatingAutoDeduct = false
     var errorMessage = ""
     var historyErrorMessage = ""
     var successMessage = ""
@@ -28,7 +29,7 @@ final class WalletViewModel {
     }
 
     func loadWallet() async {
-        guard !isLoading, !isAddingFunds, !Task.isCancelled else {
+        guard !isLoading, !isAddingFunds, !isUpdatingAutoDeduct, !Task.isCancelled else {
             return
         }
 
@@ -105,7 +106,7 @@ final class WalletViewModel {
     }
 
     func addDemoFunds() async {
-        guard !isAddingFunds, !isLoading else { return }
+        guard !isAddingFunds, !isLoading, !isUpdatingAutoDeduct else { return }
 
         errorMessage = ""
         successMessage = ""
@@ -121,6 +122,26 @@ final class WalletViewModel {
             await refreshWallet(clearMessages: false)
         } catch {
             errorMessage = "Could not confirm the top-up. Tap again to retry safely."
+        }
+    }
+
+    func setTicketAutoDeduct(enabled: Bool) async {
+        guard !isLoading, !isAddingFunds, !isUpdatingAutoDeduct,
+              wallet != nil else { return }
+
+        errorMessage = ""
+        successMessage = ""
+        isUpdatingAutoDeduct = true
+        defer { isUpdatingAutoDeduct = false }
+
+        do {
+            try await repository.setTicketAutoDeduct(enabled: enabled)
+            wallet?.autoDeductEnabled = enabled
+            successMessage = enabled
+                ? "Auto-deduction is on for new demo tickets."
+                : "Auto-deduction is off."
+        } catch {
+            errorMessage = "Could not save this wallet setting. Refresh and try again."
         }
     }
 }

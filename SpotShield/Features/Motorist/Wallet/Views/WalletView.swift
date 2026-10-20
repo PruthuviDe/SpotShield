@@ -9,6 +9,7 @@ import SwiftUI
 
 struct WalletView: View {
     @State private var viewModel: WalletViewModel
+    @State private var showAutoDeductConfirmation = false
 
     init(profile: UserProfile) {
         _viewModel = State(
@@ -30,6 +31,7 @@ struct WalletView: View {
 
                 if let wallet = viewModel.wallet {
                     walletDetails(wallet: wallet)
+                    autoDeductSetting(wallet: wallet)
 
                     Button {
                         Task {
@@ -54,7 +56,7 @@ struct WalletView: View {
                         .background(AppColors.buttonBackground, in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .disabled(viewModel.isAddingFunds || viewModel.isLoading)
+                    .disabled(viewModel.isAddingFunds || viewModel.isLoading || viewModel.isUpdatingAutoDeduct)
 
                     if !viewModel.successMessage.isEmpty {
                         Text(viewModel.successMessage)
@@ -70,7 +72,7 @@ struct WalletView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(viewModel.isLoading || viewModel.isAddingFunds)
+                .disabled(viewModel.isLoading || viewModel.isAddingFunds || viewModel.isUpdatingAutoDeduct)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
@@ -83,6 +85,18 @@ struct WalletView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadWallet()
+        }
+        .confirmationDialog(
+            "Enable auto-deduction for new demo tickets?",
+            isPresented: $showAutoDeductConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Enable auto-deduction") {
+                Task { await viewModel.setTicketAutoDeduct(enabled: true) }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("New LKR 1,000 demo tickets will be paid from your wallet when possible. Existing due tickets will not be charged. Tickets stay due if your balance is too low.")
         }
     }
 
@@ -106,6 +120,32 @@ struct WalletView: View {
                 cornerRadius: AppSpacing.radiusCard
             )
         )
+    }
+
+    private func autoDeductSetting(wallet: Wallet) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            Toggle(
+                "Auto-deduct new demo tickets",
+                isOn: Binding(
+                    get: { wallet.autoDeductEnabled },
+                    set: { enabled in
+                        if enabled {
+                            showAutoDeductConfirmation = true
+                        } else {
+                            Task { await viewModel.setTicketAutoDeduct(enabled: false) }
+                        }
+                    }
+                )
+            )
+            .disabled(viewModel.isLoading || viewModel.isAddingFunds || viewModel.isUpdatingAutoDeduct)
+
+            Text("This only applies to tickets issued after you enable it. You can pay older due tickets manually.")
+                .font(AppTypography.caption)
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.medium)
+        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
     }
 
     private var transactionHistory: some View {

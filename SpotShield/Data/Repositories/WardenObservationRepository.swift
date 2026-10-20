@@ -194,7 +194,8 @@ final class WardenObservationRepository {
                 isViolation: isViolation,
                 parkingStatus: parkingStatus,
                 ticketId: row["ticketId"] as? String,
-                decisionReason: row["decisionReason"] as? String
+                decisionReason: row["decisionReason"] as? String,
+                ticketPaymentStatus: row["ticketPaymentStatus"] as? String
             )
         }
     }

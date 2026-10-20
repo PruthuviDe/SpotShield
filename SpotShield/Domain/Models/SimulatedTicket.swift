@@ -19,4 +19,5 @@ struct SimulatedTicket: Identifiable, Codable {
     var issuedByAdminUserId: String
     var reason: String
     var paymentStatus: TicketStatus
+    var paymentMessage: String? = nil
 }

@@ -34,7 +34,26 @@ final class TicketRepository {
                 id: id, observationId: observationId, userId: userId,
                 parkingZoneId: zoneId, zoneName: zoneName, licensePlate: plate,
                 fineAmountLKR: amount, issuedAt: Date(timeIntervalSince1970: millis.doubleValue / 1000),
-                issuedByAdminUserId: adminId, reason: reason, paymentStatus: status
+                issuedByAdminUserId: adminId, reason: reason, paymentStatus: status,
+                paymentMessage: row["paymentMessage"] as? String
+            )
+        }
+    }
+
+    func payTicket(ticketId: String) async throws {
+        let result = try await Functions.functions()
+            .httpsCallable("payTicket")
+            .call(["ticketId": ticketId])
+
+        guard let data = result.data as? [String: Any],
+              data["ticketId"] as? String == ticketId,
+              data["paymentStatus"] as? String == TicketStatus.paid.rawValue,
+              let balance = data["balanceLKR"] as? Int,
+              balance >= 0 else {
+            throw NSError(
+                domain: "Tickets",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "The ticket payment could not be confirmed. Refresh before trying again."]
             )
         }
     }
