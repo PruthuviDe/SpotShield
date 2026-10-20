@@ -345,6 +345,10 @@ final class ParkingSetupViewModel {
                 operationId: requestId
             )
 
+            guard !Task.isCancelled else {
+                return
+            }
+
             guard let savedSession = try await sessionRepository.getSession(
                 sessionId: sessionId,
                 userId: profile.id
@@ -354,10 +358,44 @@ final class ParkingSetupViewModel {
                 return
             }
 
-            activeSession = savedSession
+            guard !Task.isCancelled else {
+                return
+            }
+
             selectedExtensionMinutes = 0
             pendingRequestKey = ""
             pendingOperationId = ""
+
+            guard savedSession.isActive else {
+                activeSession = nil
+                hasLoadedActiveSession = false
+                sessionErrorMessage = ""
+
+                do {
+                    activeSession = try await sessionRepository.getActiveSession(
+                        userId: profile.id
+                    )
+
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    hasLoadedActiveSession = true
+                    successMessage =
+                        "That earlier parking session has ended. No new charge was made."
+                } catch {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    parkingErrorMessage =
+                        "That earlier session has ended, but current parking could not be checked. Please refresh."
+                }
+
+                return
+            }
+
+            activeSession = savedSession
             successMessage = "Parking started. LKR \(price) paid from your demo wallet."
         } catch {
             parkingErrorMessage =
