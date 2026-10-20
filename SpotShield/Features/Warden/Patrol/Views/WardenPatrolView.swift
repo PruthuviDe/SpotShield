@@ -9,6 +9,7 @@ import SwiftUI
 
 struct WardenPatrolView: View {
     @State private var viewModel = WardenPatrolViewModel()
+    @State private var isShowingPlateScanner = false
 
     var body: some View {
         ScrollView {
@@ -58,6 +59,13 @@ struct WardenPatrolView: View {
         .navigationTitle("Warden Patrol")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.loadZones() }
+        .sheet(isPresented: $isShowingPlateScanner) {
+            NavigationStack {
+                WardenPlateScanning { scannedPlate in
+                    viewModel.licensePlate = scannedPlate
+                }
+            }
+        }
     }
 
     private var patrolForm: some View {
@@ -68,6 +76,13 @@ struct WardenPatrolView: View {
                     Text(zone.name).tag(zone.id)
                 }
             }
+
+            Button {
+                isShowingPlateScanner = true
+            } label: {
+                Label("Scan License Plate", systemImage: "camera.viewfinder")
+            }
+            .buttonStyle(.bordered)
 
             TextField("License plate", text: $viewModel.licensePlate)
                 .textInputAutocapitalization(.characters)

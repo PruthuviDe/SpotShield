@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSCameraUsageDescription</key>
+    <string>SpotShield uses the camera to scan vehicle license plates.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>SpotShield uses your location to show nearby parking zones.</string>
     <key>NSLocalNetworkUsageDescription</key>
