@@ -134,6 +134,7 @@ struct RootCoordinatorView: View {
     
     private func motoristHomeView(profile: UserProfile) -> some View {
         NavigationStack {
+            ScrollView {
                 VStack(spacing: AppSpacing.medium) {
                     Text("Welcome, \(profile.name)")
                         .font(AppTypography.titleMedium)
@@ -141,6 +142,8 @@ struct RootCoordinatorView: View {
                     Text("Driver Dashboard")
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
+
+                    ActiveParkingCard(userId: profile.id)
 
                     NavigationLink {
                         MotoristParkingView()
@@ -171,6 +174,7 @@ struct RootCoordinatorView: View {
                 .padding(AppSpacing.large)
             }
         }
+    }
     
     
     private func wardenHomeView(profile: UserProfile) -> some View {
@@ -229,4 +233,127 @@ struct RootCoordinatorView: View {
                .padding(AppSpacing.large)
            }
        }
+}
+
+private struct ActiveParkingCard: View {
+    let userId: String
+
+    @State private var session: ParkingSession?
+    @State private var isLoading = true
+    @State private var errorMessage = ""
+
+    private let repository = ParkingSessionRepository()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            Text("Current parking")
+                .font(AppTypography.titleSmall)
+
+            if isLoading {
+                ProgressView("Checking your parking...")
+            } else if !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .foregroundStyle(AppColors.statusOverstay)
+            } else if let session {
+                Text(session.zoneName)
+                    .font(AppTypography.bodyBold)
+
+                Text(session.licensePlate)
+                    .foregroundStyle(AppColors.textSecondary)
+
+                TimelineView(.periodic(from: .now, by: 1)) { clock in
+                    Text(remainingTime(
+                        until: session.paidUntil,
+                        now: clock.date
+                    ))
+                    .font(AppTypography.bodyBold)
+                    .foregroundStyle(
+                        session.paidUntil > clock.date
+                            ? AppColors.statusValid
+                            : AppColors.statusOverstay
+                    )
+                }
+
+                Text("Paid until \(formattedDate(session.paidUntil))")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+
+                Text("Use Parking Zones to extend or end parking.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+            } else {
+                Text("You have no active parking.")
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Button("Refresh parking") {
+                Task {
+                    await loadSession()
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isLoading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.medium)
+        .background(
+            AppColors.card,
+            in: RoundedRectangle(
+                cornerRadius: AppSpacing.radiusCard
+            )
+        )
+        .onAppear {
+            Task {
+                await loadSession()
+            }
+        }
+    }
+
+    @MainActor
+    private func loadSession() async {
+        isLoading = true
+        errorMessage = ""
+
+        defer {
+            isLoading = false
+        }
+
+        do {
+            session = try await repository.getActiveSession(userId: userId)
+        } catch {
+            session = nil
+            errorMessage = "Could not load parking. Tap Refresh to try again."
+        }
+    }
+
+    private func remainingTime(until paidUntil: Date, now: Date) -> String {
+        let secondsLeft = Int(paidUntil.timeIntervalSince(now))
+
+        if secondsLeft <= 0 {
+            return "Paid time has ended"
+        }
+
+        let hours = secondsLeft / 3600
+        let minutes = (secondsLeft % 3600) / 60
+        let seconds = secondsLeft % 60
+
+        if hours > 0 {
+            return "\(hours) hr \(minutes) min remaining"
+        }
+
+        if minutes > 0 {
+            return "\(minutes) min \(seconds) sec remaining"
+        }
+
+        return "\(seconds) sec remaining"
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.timeZone = TimeZone(identifier: "Asia/Colombo")
+
+        return formatter.string(from: date)
+    }
 }
