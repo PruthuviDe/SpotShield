@@ -23,6 +23,25 @@ struct MotoristParkingView: View {
                         .foregroundStyle(AppColors.statusOverstay)
                 }
 
+                if !viewModel.zones.isEmpty {
+                    NavigationLink {
+                        ParkingZoneMapView(zones: viewModel.zones)
+                    } label: {
+                        Label("View Parking Map", systemImage: "map")
+                            .font(AppTypography.bodyBold)
+                            .frame(maxWidth: .infinity)
+                            .padding(AppSpacing.medium)
+                            .foregroundStyle(AppColors.textOnAccent)
+                            .background(
+                                AppColors.accent,
+                                in: RoundedRectangle(
+                                    cornerRadius: AppSpacing.radiusButton
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if viewModel.zones.isEmpty,
                    !viewModel.isLoading,
                    viewModel.errorMessage.isEmpty {

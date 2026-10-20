@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>SpotShield uses your location to show nearby parking zones.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>SpotShield connects to the Firebase demo running on your Mac.</string>
     <key>NSAppTransportSecurity</key>
