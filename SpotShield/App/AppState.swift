@@ -11,6 +11,7 @@ import FirebaseAuth
 enum AuthState {
     case loading
     case signedOut
+    case needsProfile
     case signedIn(UserProfile)
     case wardenRequest(WardenRequest)
     case error(String)
@@ -86,9 +87,7 @@ final class AppState {
                 }
 
                 guard let request else {
-                    authState = .error(
-                        "Your account details are missing or incomplete."
-                    )
+                    authState = .needsProfile
                     return
                 }
 

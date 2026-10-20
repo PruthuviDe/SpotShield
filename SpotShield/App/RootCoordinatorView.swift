@@ -20,6 +20,8 @@ struct RootCoordinatorView: View {
                 loadingView
             case .signedOut:
                 signedOutView
+            case .needsProfile:
+                NavigationStack { DriverSetupView() }
             case .signedIn(let profile):
                 switch profile.role {
                 case .motorist:
@@ -166,6 +168,22 @@ struct RootCoordinatorView: View {
                     }
                     .buttonStyle(.borderedProminent)
 
+                    NavigationLink {
+                        MotoristTicketsView()
+                    } label: {
+                        Text("My Demo Tickets")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    if profile.primaryVehicleId == nil {
+                        NavigationLink {
+                            DriverSetupView(profile: profile)
+                        } label: {
+                            Text("Add Vehicle")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+
                     Button("Sign Out") {
                         appState.signOut()
                     }
@@ -185,6 +203,20 @@ struct RootCoordinatorView: View {
                 Text("Parking Warden Dashboard")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
+
+                NavigationLink {
+                    WardenPatrolView()
+                } label: {
+                    Text("Start Patrol")
+                }
+                .buttonStyle(.borderedProminent)
+
+                NavigationLink {
+                    WardenRecordsView()
+                } label: {
+                    Text("My Observations")
+                }
+                .buttonStyle(.borderedProminent)
                 
                 Button("Sign Out") {
                     appState.signOut()
@@ -222,6 +254,13 @@ struct RootCoordinatorView: View {
                        WardenRequestsView(adminUserId: profile.id)
                    } label: {
                        Text("Warden Applications")
+                   }
+                   .buttonStyle(.borderedProminent)
+
+                   NavigationLink {
+                       AdminTicketReviewView()
+                   } label: {
+                       Text("Review Observations")
                    }
                    .buttonStyle(.borderedProminent)
 

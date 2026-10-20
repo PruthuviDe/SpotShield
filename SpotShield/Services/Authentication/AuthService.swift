@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseAuth
+import FirebaseFunctions
 
 final class AuthService {
     private let auth = Auth.auth()
@@ -36,11 +37,15 @@ final class AuthService {
             try await userProfileRepository.saveMotoristDetails(
                 userId: newAccount.user.uid,
                 name: name,
-                email: email,
                 licensePlate: licensePlate
             )
         } catch {
-            try? await newAccount.user.delete()
+            let savedError = error as NSError
+            if savedError.domain == FunctionsErrorDomain,
+               let code = FunctionsErrorCode(rawValue: savedError.code),
+               [.invalidArgument, .alreadyExists, .permissionDenied, .failedPrecondition].contains(code) {
+                try? await newAccount.user.delete()
+            }
             throw error
         }
     }

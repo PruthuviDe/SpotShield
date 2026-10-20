@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseFunctions
 
 final class UserProfileRepository {
     private let database = Firestore.firestore()
@@ -14,65 +15,26 @@ final class UserProfileRepository {
     func saveMotoristDetails(
         userId: String,
         name: String,
-        email: String,
         licensePlate: String = ""
     ) async throws {
-        let batch = database.batch()
+        let result = try await Functions.functions()
+            .httpsCallable("completeMotoristProfile")
+            .call(["name": name, "licensePlate": licensePlate])
 
-        var profile = UserProfile(
-            id: userId,
-            name: name,
-            email: email,
-            role: .motorist,
-            primaryVehicleId: nil
-        )
-
-        let plate = licensePlate
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-
-        if !plate.isEmpty {
-            let vehicleDocument = database
-                .collection("vehicles")
-                .document()
-
-            let vehicle = Vehicle(
-                id: vehicleDocument.documentID,
-                ownerUserId: userId,
-                licensePlate: plate,
-                make: "",
-                model: ""
-            )
-
-            profile.primaryVehicleId = vehicle.id
-
-            batch.setData(
-                vehicleData(vehicle),
-                forDocument: vehicleDocument,
-                merge: true
-            )
+        guard let data = result.data as? [String: Any],
+              data["userId"] as? String == userId else {
+            throw NSError(domain: "DriverSetup", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Could not confirm your profile. Sign in again to check the saved setup."
+            ])
         }
-
-        let profileDocument = database
-            .collection("users")
-            .document(userId)
-
-        batch.setData(
-            profileData(profile),
-            forDocument: profileDocument,
-            merge: true
-        )
-
-        try await batch.commit()
     }
 
-    func saveProfile(profile: UserProfile) async throws {
-        try await database
-            .collection("users")
-            .document(profile.id)
-            .setData(profileData(profile), merge: true)
+    func addMotoristVehicle(licensePlate: String) async throws {
+        _ = try await Functions.functions()
+            .httpsCallable("addMotoristVehicle")
+            .call(["licensePlate": licensePlate])
     }
-    
+
     func getWardens() async throws -> [UserProfile] {
         let result = try await database
             .collection("users")
@@ -138,13 +100,6 @@ final class UserProfileRepository {
         )
     }
 
-    func saveVehicle(vehicle: Vehicle) async throws {
-        try await database
-            .collection("vehicles")
-            .document(vehicle.id)
-            .setData(vehicleData(vehicle), merge: true)
-    }
-
     func getVehicle(vehicleId: String) async throws -> Vehicle? {
         let snapshot = try await database
             .collection("vehicles")
@@ -168,26 +123,4 @@ final class UserProfileRepository {
         )
     }
 
-    private func profileData(_ profile: UserProfile) -> [String: Any] {
-        var data: [String: Any] = [
-            "name": profile.name,
-            "email": profile.email,
-            "role": profile.role.rawValue
-        ]
-
-        if let vehicleId = profile.primaryVehicleId {
-            data["primaryVehicleId"] = vehicleId
-        }
-
-        return data
-    }
-
-    private func vehicleData(_ vehicle: Vehicle) -> [String: Any] {
-        [
-            "ownerUserId": vehicle.ownerUserId,
-            "licensePlate": vehicle.licensePlate,
-            "make": vehicle.make,
-            "model": vehicle.model
-        ]
-    }
 }

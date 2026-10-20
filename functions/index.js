@@ -9,6 +9,8 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 initializeApp();
 
 const database = getFirestore();
+const { isValidParkingId, normalizePlate, plateKey, readPlateVehicle, readPlateSessions, parkingPrice, parkingHours, checkWardenCoverage } = require("./parkingHelpers");
+
 
 exports.checkConnection = onCall((request) => {
   if (!request.auth) {
@@ -278,6 +280,21 @@ exports.startParking = onCall(async (request) => {
       );
     }
 
+    const plate = normalizePlate(vehicle.licensePlate);
+    if (!plate) throw new HttpsError("failed-precondition", "Your saved license plate is not valid.");
+    const plateRef = database.collection("vehiclePlates").doc(plateKey(plate));
+    const plateRecord = await transaction.get(plateRef);
+    const registeredVehicle = await readPlateVehicle(transaction, plate);
+    if (!registeredVehicle || registeredVehicle.id !== vehicleId ||
+        (plateRecord.exists && plateRecord.get("ownerUserId") &&
+         (plateRecord.get("ownerUserId") !== userId || plateRecord.get("vehicleId") !== vehicleId))) {
+      throw new HttpsError("failed-precondition", "This plate's account link needs Admin review.");
+    }
+    const plateSessions = await readPlateSessions(transaction, plate);
+    if (plateRecord.get("activeSessionId") || plateSessions.length > 0) {
+      throw new HttpsError("failed-precondition", "This plate already has an open session. End it before starting another one.");
+    }
+
     if (
       !zoneDocument.exists ||
       zone.isPublished !== true ||
@@ -369,7 +386,7 @@ exports.startParking = onCall(async (request) => {
       vehicleId: vehicleId,
       parkingZoneId: parkingZoneId,
       zoneName: zone.name,
-      licensePlate: vehicle.licensePlate.trim(),
+      licensePlate: plate,
       startTime: startTime,
       paidUntil: paidUntil,
       durationMinutes: durationMinutes,
@@ -399,6 +416,13 @@ exports.startParking = onCall(async (request) => {
       userId: userId,
       vehicleId: vehicleId,
       parkingSessionId: sessionRef.id
+    });
+
+    transaction.set(plateRef, {
+      ownerUserId: userId,
+      vehicleId: vehicleId,
+      licensePlate: plate,
+      activeSessionId: sessionRef.id
     });
 
     return { sessionId: sessionRef.id };
@@ -500,12 +524,18 @@ exports.endParking = onCall(async (request) => {
       );
     }
 
+    const plateRef = database.collection("vehiclePlates").doc(plateKey(session.licensePlate));
+    const plateRecord = await transaction.get(plateRef);
+
     transaction.update(sessionRef, {
       isActive: false,
       endTime: FieldValue.serverTimestamp()
     });
 
     transaction.delete(activeSessionRef);
+    if (plateRecord.exists && plateRecord.get("activeSessionId") === sessionId) {
+      transaction.update(plateRef, { activeSessionId: FieldValue.delete() });
+    }
 
     return { sessionId: sessionId, ended: true };
   });
@@ -841,60 +871,18 @@ exports.extendParking = onCall(async (request) => {
   });
 });
 
-function parkingPrice(hourlyRateLKR, minutes) {
-  const price = minutes === 30
-    ? Math.ceil(hourlyRateLKR / 2)
-    : hourlyRateLKR * (minutes / 60);
 
-  if (!Number.isSafeInteger(price) || price <= 0) {
-    throw new HttpsError("failed-precondition", "The parking price is not valid.");
-  }
+const vehicleIdentity = require("./vehicleIdentity");
+exports.completeMotoristProfile = vehicleIdentity.completeMotoristProfile;
+exports.addMotoristVehicle = vehicleIdentity.addMotoristVehicle;
 
-  return price;
-}
-
-function parkingHours(date, openingHour, closingHour, timeZoneId) {
-  const localTime = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timeZoneId,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23"
-  }).format(date);
-  const [hour, minute, second] = localTime.split(":").map(Number);
-  const secondsSinceMidnight = hour * 3600 + minute * 60 + second;
-  const midnightMillis = date.getTime()
-    - secondsSinceMidnight * 1000 - date.getMilliseconds();
-
-  return {
-    openingTimeMillis: midnightMillis + openingHour * 3600000,
-    closingTimeMillis: midnightMillis + closingHour * 3600000
-  };
-}
-
-async function checkWardenCoverage(transaction, zoneId, assignmentId) {
-  const assignmentRef = database.collection("wardenAssignments").doc(assignmentId);
-  const assignmentDocument = await transaction.get(assignmentRef);
-  const assignment = assignmentDocument.data();
-
-  if (
-    !assignmentDocument.exists ||
-    assignment.parkingZoneId !== zoneId ||
-    assignment.isActive !== true ||
-    "endedAt" in assignment ||
-    !isValidParkingId(assignment.wardenUserId)
-  ) {
-    throw new HttpsError("failed-precondition", "This zone needs an active Warden.");
-  }
-
-  const wardenRef = database.collection("users").doc(assignment.wardenUserId);
-  const wardenDocument = await transaction.get(wardenRef);
-
-  if (!wardenDocument.exists || wardenDocument.get("role") !== "Warden") {
-    throw new HttpsError("failed-precondition", "This zone needs an approved Warden.");
-  }
-}
-
-function isValidParkingId(value) {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-}
+const enforcement = require("./enforcement");
+exports.getWardenZones = enforcement.getWardenZones;
+exports.checkParkingPlate = enforcement.checkParkingPlate;
+exports.submitWardenObservation = enforcement.submitWardenObservation;
+exports.getWardenObservations = enforcement.getWardenObservations;
+exports.getPendingWardenObservations = enforcement.getPendingWardenObservations;
+exports.getReviewedWardenObservations = enforcement.getReviewedWardenObservations;
+exports.getObservationReview = enforcement.getObservationReview;
+exports.reviewWardenObservation = enforcement.reviewWardenObservation;
+exports.getMyTickets = enforcement.getMyTickets;

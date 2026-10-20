@@ -22,5 +22,9 @@ struct WardenObservation: Identifiable, Codable {
     var observedAt: Date
     var reviewStatus: ObservationStatus
     var notes: String?
+    var isViolation: Bool
+    var parkingStatus: String
+    var ticketId: String?
+    var decisionReason: String? = nil
 }
     

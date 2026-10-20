@@ -94,12 +94,7 @@ service cloud.firestore {
           (
             isOwner(userId)
             && request.resource.data.role == "Motorist"
-            && (
-              !("primaryVehicleId" in request.resource.data)
-              || getAfter(
-                /databases/$(database)/documents/vehicles/$(request.resource.data.primaryVehicleId)
-              ).data.ownerUserId == userId
-            )
+            && !("primaryVehicleId" in request.resource.data)
           )
           || (isAdmin() && canCreateWardenProfile())
         );
@@ -108,29 +103,10 @@ service cloud.firestore {
     }
 
     match /vehicles/{vehicleId} {
-      function isValidVehicle() {
-        let vehicle = request.resource.data;
-        return vehicle.keys().hasAll([
-            "ownerUserId", "licensePlate", "make", "model"
-          ])
-          && vehicle.keys().hasOnly([
-            "ownerUserId", "licensePlate", "make", "model"
-          ])
-          && validId(vehicle.ownerUserId)
-          && validText(vehicle.licensePlate, 1, 32)
-          && validText(vehicle.make, 0, 80)
-          && validText(vehicle.model, 0, 80);
-      }
-
       allow read: if isSignedIn()
         && resource.data.ownerUserId == request.auth.uid;
 
-      allow create: if isSignedIn()
-        && isValidVehicle()
-        && request.resource.data.ownerUserId == request.auth.uid
-        && getAfter(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.primaryVehicleId == vehicleId;
+      allow create: if false;
 
       allow update, delete: if false;
     }

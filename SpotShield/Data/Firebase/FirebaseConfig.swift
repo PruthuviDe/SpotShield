@@ -13,7 +13,7 @@ import FirebaseFunctions
 
 enum FirebaseConfig {
     static func configure() {
-        #if DEBUG && targetEnvironment(simulator)
+        #if DEBUG
         if ProcessInfo.processInfo.environment["SPOTSHIELD_USE_EMULATORS"] == "1" {
             let options = FirebaseOptions(
                 googleAppID: "1:1234567890:ios:0123456789abcdef",
@@ -22,18 +22,24 @@ enum FirebaseConfig {
             options.apiKey = "demo-api-key"
             options.projectID = "demo-spotshield"
 
+            #if targetEnvironment(simulator)
+            let host = "127.0.0.1"
+            #else
+            let host = ProcessInfo.processInfo.environment["SPOTSHIELD_EMULATOR_HOST"] ?? "localhost"
+            #endif
+
             FirebaseApp.configure(options: options)
-            Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
+            Auth.auth().useEmulator(withHost: host, port: 9099)
 
             let database = Firestore.firestore()
             let settings = database.settings
-            settings.host = "127.0.0.1:8080"
+            settings.host = "\(host):8080"
             settings.isSSLEnabled = false
             settings.cacheSettings = MemoryCacheSettings()
             database.settings = settings
 
             let functions = Functions.functions()
-            functions.useEmulator(withHost: "127.0.0.1", port: 5001)
+            functions.useEmulator(withHost: host, port: 5001)
 
             return
         }
