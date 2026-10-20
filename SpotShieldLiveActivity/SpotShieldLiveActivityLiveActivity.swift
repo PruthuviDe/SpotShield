@@ -1,0 +1,79 @@
+//
+//  SpotShieldLiveActivityLiveActivity.swift
+//  SpotShieldLiveActivity
+//
+//  Created by Pruthuvi de Silva on 2026-10-20.
+//
+
+import ActivityKit
+import SwiftUI
+import WidgetKit
+
+struct SpotShieldLiveActivityLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: ParkingActivityAttributes.self) { context in
+            VStack(alignment: .leading, spacing: 12) {
+                Text(context.attributes.zoneName)
+                    .font(.headline)
+
+                HStack {
+                    Text("Parking active")
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    countdown(until: context.state.paidUntil)
+                        .font(.title2.bold())
+                }
+
+                Text(
+                    "Paid until \(context.state.paidUntil.formatted(date: .omitted, time: .shortened))"
+                )
+                .foregroundStyle(.secondary)
+            }
+            .padding()
+            .activityBackgroundTint(.white)
+            .activitySystemActionForegroundColor(.black)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image(systemName: "car.fill")
+                }
+
+                DynamicIslandExpandedRegion(.trailing) {
+                    countdown(until: context.state.paidUntil)
+                        .font(.caption)
+                }
+
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(context.attributes.zoneName)
+
+                        Text(
+                            "Paid until \(context.state.paidUntil.formatted(date: .omitted, time: .shortened))"
+                        )
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            } compactLeading: {
+                Image(systemName: "car.fill")
+            } compactTrailing: {
+                countdown(until: context.state.paidUntil)
+                    .font(.caption2)
+            } minimal: {
+                Image(systemName: "car.fill")
+            }
+            .keylineTint(.green)
+        }
+    }
+
+    @ViewBuilder
+    private func countdown(until deadline: Date) -> some View {
+        if deadline > .now {
+            Text(timerInterval: .now...deadline, countsDown: true)
+                .monospacedDigit()
+        } else {
+            Text("Expired")
+        }
+    }
+}

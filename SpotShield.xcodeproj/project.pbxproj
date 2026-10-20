@@ -10,16 +10,74 @@
 		CE1DE2BF3076234E00901F6D /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = CE1DE2BE3076234E00901F6D /* FirebaseAuth */; };
 		CE1DE2C13076234E00901F6D /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = CE1DE2C03076234E00901F6D /* FirebaseFirestore */; };
 		CE94DC71308499EF009855F1 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = CE94DC70308499EF009855F1 /* FirebaseFunctions */; };
+		CECDE8893087A891007C468E /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CECDE8883087A891007C468E /* WidgetKit.framework */; };
+		CECDE88B3087A891007C468E /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CECDE88A3087A891007C468E /* SwiftUI.framework */; };
+		CECDE8983087A894007C468E /* SpotShieldLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CECDE8873087A891007C468E /* SpotShieldLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CECDE8963087A894007C468E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CE4B034B306E047200608E4A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CECDE8863087A891007C468E;
+			remoteInfo = SpotShieldLiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CECDE8993087A894007C468E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CECDE8983087A894007C468E /* SpotShieldLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		CE4B0353306E047200608E4A /* SpotShield.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpotShield.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CECDE8873087A891007C468E /* SpotShieldLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpotShieldLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CECDE8883087A891007C468E /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		CECDE88A3087A891007C468E /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CECDE89C3087A894007C468E /* Exceptions for "SpotShieldLiveActivity" folder in "SpotShieldLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CECDE8863087A891007C468E /* SpotShieldLiveActivityExtension */;
+		};
+		CECDE8A43087A9A2007C468E /* Exceptions for "SpotShield" folder in "SpotShieldLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Platform/LiveActivities/ParkingActivityAttributes.swift,
+			);
+			target = CECDE8863087A891007C468E /* SpotShieldLiveActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CE4B0355306E047200608E4A /* SpotShield */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CECDE8A43087A9A2007C468E /* Exceptions for "SpotShield" folder in "SpotShieldLiveActivityExtension" target */,
+			);
 			path = SpotShield;
+			sourceTree = "<group>";
+		};
+		CECDE88C3087A891007C468E /* SpotShieldLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CECDE89C3087A894007C468E /* Exceptions for "SpotShieldLiveActivity" folder in "SpotShieldLiveActivityExtension" target */,
+			);
+			path = SpotShieldLiveActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +93,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CECDE8843087A891007C468E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CECDE88B3087A891007C468E /* SwiftUI.framework in Frameworks */,
+				CECDE8893087A891007C468E /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -42,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				CE4B0355306E047200608E4A /* SpotShield */,
+				CECDE88C3087A891007C468E /* SpotShieldLiveActivity */,
 				CE94DC6F308499EF009855F1 /* Frameworks */,
 				CE4B0354306E047200608E4A /* Products */,
 			);
@@ -51,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				CE4B0353306E047200608E4A /* SpotShield.app */,
+				CECDE8873087A891007C468E /* SpotShieldLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -58,6 +127,8 @@
 		CE94DC6F308499EF009855F1 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				CECDE8883087A891007C468E /* WidgetKit.framework */,
+				CECDE88A3087A891007C468E /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -72,10 +143,12 @@
 				CE4B034F306E047200608E4A /* Sources */,
 				CE4B0350306E047200608E4A /* Frameworks */,
 				CE4B0351306E047200608E4A /* Resources */,
+				CECDE8993087A894007C468E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CECDE8973087A894007C468E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				CE4B0355306E047200608E4A /* SpotShield */,
@@ -90,6 +163,28 @@
 			productReference = CE4B0353306E047200608E4A /* SpotShield.app */;
 			productType = "com.apple.product-type.application";
 		};
+		CECDE8863087A891007C468E /* SpotShieldLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CECDE89D3087A894007C468E /* Build configuration list for PBXNativeTarget "SpotShieldLiveActivityExtension" */;
+			buildPhases = (
+				CECDE8833087A891007C468E /* Sources */,
+				CECDE8843087A891007C468E /* Frameworks */,
+				CECDE8853087A891007C468E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CECDE88C3087A891007C468E /* SpotShieldLiveActivity */,
+			);
+			name = SpotShieldLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = SpotShieldLiveActivityExtension;
+			productReference = CECDE8873087A891007C468E /* SpotShieldLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -101,6 +196,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					CE4B0352306E047200608E4A = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					CECDE8863087A891007C468E = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -123,12 +221,20 @@
 			projectRoot = "";
 			targets = (
 				CE4B0352306E047200608E4A /* SpotShield */,
+				CECDE8863087A891007C468E /* SpotShieldLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		CE4B0351306E047200608E4A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CECDE8853087A891007C468E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -145,7 +251,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CECDE8833087A891007C468E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CECDE8973087A894007C468E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CECDE8863087A891007C468E /* SpotShieldLiveActivityExtension */;
+			targetProxy = CECDE8963087A894007C468E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		CE4B035C306E047200608E4A /* Debug */ = {
@@ -278,6 +399,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Configuration/LocalInfo.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -311,6 +434,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -327,6 +452,64 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CECDE89A3087A894007C468E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpotShieldLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SpotShieldLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pruthuvidesilva.SpotShield.SpotShieldLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CECDE89B3087A894007C468E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpotShieldLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SpotShieldLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pruthuvidesilva.SpotShield.SpotShieldLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -351,6 +534,15 @@
 			buildConfigurations = (
 				CE4B035F306E047200608E4A /* Debug */,
 				CE4B0360306E047200608E4A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CECDE89D3087A894007C468E /* Build configuration list for PBXNativeTarget "SpotShieldLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CECDE89A3087A894007C468E /* Debug */,
+				CECDE89B3087A894007C468E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
