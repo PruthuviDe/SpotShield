@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import FirebaseFunctions
 
 @MainActor
 @Observable
@@ -29,13 +28,25 @@ final class WalletViewModel {
     }
 
     func loadWallet() async {
-        guard !isLoading, !Task.isCancelled else { return }
+        guard !isLoading, !isAddingFunds, !Task.isCancelled else {
+            return
+        }
 
-        wallet = nil
-        transactions = []
-        errorMessage = ""
-        historyErrorMessage = ""
-        successMessage = ""
+        await refreshWallet(clearMessages: true)
+    }
+
+    private func refreshWallet(clearMessages: Bool) async {
+        guard !isLoading, !Task.isCancelled else {
+            return
+        }
+
+        if clearMessages {
+            wallet = nil
+            transactions = []
+            errorMessage = ""
+            historyErrorMessage = ""
+            successMessage = ""
+        }
 
         guard profile.role == .motorist else {
             errorMessage = "Wallets are available to Drivers only."
@@ -105,20 +116,11 @@ final class WalletViewModel {
         }
 
         do {
-            let function = Functions.functions().httpsCallable("topUpWallet")
-
-            _ = try await function.call([
-                "amountLKR": 1000,
-                "operationId": UUID().uuidString
-            ])
-
-            await loadWallet()
-
-            if errorMessage.isEmpty {
-                successMessage = "LKR 1,000 demo funds added."
-            }
+            try await repository.addDemoFunds(userId: profile.id)
+            successMessage = "LKR 1,000 demo funds added."
+            await refreshWallet(clearMessages: false)
         } catch {
-            errorMessage = "Could not add demo funds: \(error.localizedDescription)"
+            errorMessage = "Could not confirm the top-up. Tap again to retry safely."
         }
     }
 }

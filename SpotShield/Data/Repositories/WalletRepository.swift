@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseFunctions
 
 final class WalletRepository {
     private lazy var database = Firestore.firestore()
@@ -77,11 +78,41 @@ final class WalletRepository {
             }
         }
     }
+
+    func addDemoFunds(userId: String) async throws {
+        guard !userId.isEmpty, !userId.contains("/") else {
+            throw WalletError.invalidUserId
+        }
+
+        let operationKey = "wallet.pendingDemoTopUp.\(userId)"
+        let defaults = UserDefaults.standard
+        let operationId = defaults.string(forKey: operationKey) ?? UUID().uuidString
+
+        defaults.set(operationId, forKey: operationKey)
+
+        let result = try await Functions.functions()
+            .httpsCallable("topUpWallet")
+            .call([
+                "amountLKR": 1000,
+                "operationId": operationId
+            ])
+
+        guard let data = result.data as? [String: Any],
+              let returnedOperationId = data["operationId"] as? String,
+              returnedOperationId == operationId,
+              let balance = data["balanceLKR"] as? Int,
+              balance >= 0 else {
+            throw WalletError.invalidTopUpResponse
+        }
+
+        defaults.removeObject(forKey: operationKey)
+    }
 }
 
 private enum WalletError: LocalizedError {
     case invalidUserId
     case invalidDetails
+    case invalidTopUpResponse
 
     var errorDescription: String? {
         switch self {
@@ -89,6 +120,8 @@ private enum WalletError: LocalizedError {
             return "Your user ID is missing or incorrect."
         case .invalidDetails:
             return "Your wallet details are missing or incorrect."
+        case .invalidTopUpResponse:
+            return "The top-up response could not be confirmed. Please try again."
         }
     }
 }

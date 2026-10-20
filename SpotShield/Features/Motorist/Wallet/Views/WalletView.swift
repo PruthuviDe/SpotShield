@@ -70,7 +70,7 @@ struct WalletView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(viewModel.isLoading)
+                .disabled(viewModel.isLoading || viewModel.isAddingFunds)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
