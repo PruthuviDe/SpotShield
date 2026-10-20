@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ParkingSetupView: View {
-    let zone: ParkingZone
+    let zone: ParkingZone?
 
     @State private var viewModel: ParkingSetupViewModel
     @State private var isShowingEndConfirmation = false
@@ -21,11 +21,23 @@ struct ParkingSetupView: View {
         )
     }
 
+    init(profile: UserProfile) {
+        self.zone = nil
+        _viewModel = State(
+            initialValue: ParkingSetupViewModel(profile: profile)
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
-                Text(zone.name)
-                    .font(AppTypography.titleMedium)
+                if let zone {
+                    Text(zone.name)
+                        .font(AppTypography.titleMedium)
+                } else if let session = viewModel.activeSession {
+                    Text(session.zoneName)
+                        .font(AppTypography.titleMedium)
+                }
 
                 if viewModel.isLoading {
                     ProgressView("Loading your vehicle...")
@@ -61,15 +73,21 @@ struct ParkingSetupView: View {
 
                 if let session = viewModel.activeSession {
                     activeSessionDetails(session: session)
-                } else if viewModel.vehicle != nil,
+                } else if let zone = zone,
+                          viewModel.vehicle != nil,
                           !viewModel.isLoadingSession,
                           viewModel.sessionErrorMessage.isEmpty {
-                    parkingDetails
+                    parkingDetails(zone: zone)
+                } else if zone == nil,
+                          !viewModel.isLoadingSession,
+                          viewModel.sessionErrorMessage.isEmpty {
+                    Text("You have no active parking session.")
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Button("Refresh") {
                     Task {
-                        await viewModel.refresh()
+                        await loadScreen()
                     }
                 }
                 .buttonStyle(.bordered)
@@ -81,10 +99,10 @@ struct ParkingSetupView: View {
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("Parking Setup")
+        .navigationTitle(zone == nil ? "Manage Parking" : "Parking Setup")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await viewModel.refresh()
+            await loadScreen()
         }
         .confirmationDialog(
             "End parking? Unused time will not be refunded.",
@@ -105,7 +123,15 @@ struct ParkingSetupView: View {
         }
     }
 
-    private var parkingDetails: some View {
+    private func loadScreen() async {
+        if zone == nil {
+            await viewModel.loadActiveSession()
+        } else {
+            await viewModel.refresh()
+        }
+    }
+
+    private func parkingDetails(zone: ParkingZone) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { clock in
             let durations = viewModel.availableDurations(
                 zone: zone,

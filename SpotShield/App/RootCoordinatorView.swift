@@ -143,7 +143,7 @@ struct RootCoordinatorView: View {
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
 
-                    ActiveParkingCard(userId: profile.id)
+                    ActiveParkingCard(profile: profile)
 
                     NavigationLink {
                         MotoristParkingView()
@@ -236,7 +236,7 @@ struct RootCoordinatorView: View {
 }
 
 private struct ActiveParkingCard: View {
-    let userId: String
+    let profile: UserProfile
 
     @State private var session: ParkingSession?
     @State private var isLoading = true
@@ -278,9 +278,12 @@ private struct ActiveParkingCard: View {
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
 
-                Text("Use Parking Zones to extend or end parking.")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
+                NavigationLink {
+                    ParkingSetupView(profile: profile)
+                } label: {
+                    Text("Manage Parking")
+                }
+                .buttonStyle(.borderedProminent)
             } else {
                 Text("You have no active parking.")
                     .foregroundStyle(AppColors.textSecondary)
@@ -319,7 +322,7 @@ private struct ActiveParkingCard: View {
         }
 
         do {
-            session = try await repository.getActiveSession(userId: userId)
+            session = try await repository.getActiveSession(userId: profile.id)
         } catch {
             session = nil
             errorMessage = "Could not load parking. Tap Refresh to try again."
