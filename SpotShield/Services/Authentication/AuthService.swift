@@ -22,6 +22,10 @@ final class AuthService {
         try await auth.signIn(withEmail: email, password: password)
     }
 
+    func sendPasswordReset(email: String) async throws {
+        try await auth.sendPasswordReset(withEmail: email)
+    }
+
     func createMotoristAccount(
         name: String,
         email: String,

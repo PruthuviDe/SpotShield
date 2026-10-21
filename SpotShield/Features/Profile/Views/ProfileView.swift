@@ -11,6 +11,7 @@ import UIKit
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: ProfileViewModel
 
     init(profile: UserProfile) {
@@ -27,6 +28,8 @@ struct ProfileView: View {
                 if viewModel.profile.role == .motorist {
                     vehicleSection
                     walletLink
+                } else if viewModel.profile.role == .warden {
+                    assignmentSection
                 }
 
                 notificationsSection
@@ -47,6 +50,13 @@ struct ProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.load()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await viewModel.refreshNotificationStatus()
+                }
+            }
         }
     }
 
@@ -80,8 +90,13 @@ struct ProfileView: View {
                 Text(vehicle.licensePlate)
                     .font(AppTypography.bodyBold)
 
-                Text("\(vehicle.make) \(vehicle.model)")
-                    .foregroundStyle(AppColors.textSecondary)
+                let vehicleDescription = "\(vehicle.make) \(vehicle.model)"
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if !vehicleDescription.isEmpty {
+                    Text(vehicleDescription)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
             } else {
                 Text(viewModel.vehicleMessage)
                     .foregroundStyle(AppColors.textSecondary)
@@ -105,9 +120,49 @@ struct ProfileView: View {
         .buttonStyle(.bordered)
     }
 
+    private var assignmentSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            Text("Assigned patrol zones")
+                .font(AppTypography.titleSmall)
+
+            if viewModel.isLoadingZones {
+                ProgressView("Loading assigned zones...")
+            } else if !viewModel.assignmentError.isEmpty {
+                Text(viewModel.assignmentError)
+                    .foregroundStyle(AppColors.statusOverstay)
+            } else if viewModel.assignedZones.isEmpty {
+                Text("No active parking zones are assigned to you.")
+                    .foregroundStyle(AppColors.textSecondary)
+            } else {
+                ForEach(viewModel.assignedZones) { zone in
+                    Text(zone.name)
+                        .font(AppTypography.bodyBold)
+                }
+
+                Text("Only active zones currently available for patrol are shown.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Button("Refresh assignments") {
+                Task {
+                    await viewModel.loadAssignedZones()
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.isLoadingZones)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppSpacing.medium)
+        .background(
+            AppColors.card,
+            in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
+        )
+    }
+
     private var notificationsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Parking reminders")
+            Text(viewModel.profile.role == .motorist ? "Parking reminders" : "Notifications")
                 .font(AppTypography.titleSmall)
 
             Text("Notification access: \(viewModel.notificationStatus)")

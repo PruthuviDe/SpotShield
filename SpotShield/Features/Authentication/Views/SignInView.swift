@@ -18,11 +18,19 @@ struct SignInView: View {
             VStack(spacing: AppSpacing.large) {
                 header
                 fields
+                forgotPasswordButton
 
                 if !viewModel.errorMessage.isEmpty {
                     Text(viewModel.errorMessage)
                         .font(AppTypography.bodySmall)
                         .foregroundStyle(AppColors.statusOverstay)
+                        .multilineTextAlignment(.center)
+                }
+
+                if !viewModel.successMessage.isEmpty {
+                    Text(viewModel.successMessage)
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.statusValid)
                         .multilineTextAlignment(.center)
                 }
 
@@ -36,7 +44,7 @@ struct SignInView: View {
                             .font(AppTypography.bodyBold)
                             .frame(minHeight: AppSpacing.minTouchTarget)
                     }
-                    .disabled(viewModel.isLoading)
+                    .disabled(viewModel.isBusy)
                 }
             }
             .padding(AppSpacing.large)
@@ -109,7 +117,26 @@ struct SignInView: View {
                 )
         }
         .font(AppTypography.bodyMedium)
-        .disabled(viewModel.isLoading)
+        .disabled(viewModel.isBusy)
+    }
+
+    private var forgotPasswordButton: some View {
+        Button {
+            Task {
+                await viewModel.sendPasswordReset()
+            }
+        } label: {
+            Text(
+                viewModel.isSendingPasswordReset
+                    ? "Sending reset link..."
+                    : "Forgot Password?"
+            )
+            .font(AppTypography.bodyBold)
+            .frame(minHeight: AppSpacing.minTouchTarget)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .disabled(viewModel.isBusy)
     }
 
     private var signInButton: some View {
@@ -134,7 +161,7 @@ struct SignInView: View {
             .background(AppColors.buttonBackground, in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(viewModel.isLoading)
+        .disabled(viewModel.isBusy)
     }
 }
 

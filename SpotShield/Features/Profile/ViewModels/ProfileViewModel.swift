@@ -15,11 +15,15 @@ final class ProfileViewModel {
     let profile: UserProfile
 
     private let repository = UserProfileRepository()
+    private let wardenRepository = WardenObservationRepository()
     private let notificationCenter = UNUserNotificationCenter.current()
 
     var vehicle: Vehicle?
     var vehicleMessage = ""
     var isLoadingVehicle = false
+    var assignedZones: [WardenPatrolZone] = []
+    var isLoadingZones = false
+    var assignmentError = ""
     var notificationStatus = "Checking..."
     var notificationError = ""
     var isRequestingNotifications = false
@@ -29,14 +33,25 @@ final class ProfileViewModel {
     }
 
     func load() async {
-        await loadVehicle()
         await refreshNotificationStatus()
+
+        switch profile.role {
+        case .motorist:
+            await loadVehicle()
+        case .warden:
+            await loadAssignedZones()
+        case .admin:
+            break
+        }
     }
 
     func loadVehicle() async {
-        guard profile.role == .motorist else {
+        guard profile.role == .motorist, !isLoadingVehicle else {
             return
         }
+
+        vehicle = nil
+        vehicleMessage = ""
 
         guard let vehicleId = profile.primaryVehicleId else {
             vehicleMessage = "No vehicle is linked to this account."
@@ -44,11 +59,14 @@ final class ProfileViewModel {
         }
 
         isLoadingVehicle = true
+        defer { isLoadingVehicle = false }
 
         do {
             let loadedVehicle = try await repository.getVehicle(
                 vehicleId: vehicleId
             )
+
+            guard !Task.isCancelled else { return }
 
             if let loadedVehicle, loadedVehicle.ownerUserId == profile.id {
                 vehicle = loadedVehicle
@@ -57,15 +75,33 @@ final class ProfileViewModel {
                 vehicleMessage = "Vehicle details could not be found."
             }
         } catch {
+            guard !Task.isCancelled else { return }
             vehicleMessage = "Could not load vehicle details."
         }
+    }
 
-        isLoadingVehicle = false
+    func loadAssignedZones() async {
+        guard profile.role == .warden, !isLoadingZones else { return }
+
+        isLoadingZones = true
+        assignmentError = ""
+        assignedZones = []
+        defer { isLoadingZones = false }
+
+        do {
+            let zones = try await wardenRepository.getZones()
+            guard !Task.isCancelled else { return }
+            assignedZones = zones.sorted { $0.name < $1.name }
+        } catch {
+            guard !Task.isCancelled else { return }
+            assignmentError = "Could not load your assigned zones. Please refresh."
+        }
     }
 
     func refreshNotificationStatus() async {
         notificationStatus = "Checking..."
         let settings = await notificationCenter.notificationSettings()
+        guard !Task.isCancelled else { return }
 
         switch settings.authorizationStatus {
         case .authorized:
@@ -84,8 +120,11 @@ final class ProfileViewModel {
     }
 
     func requestNotifications() async {
+        guard !isRequestingNotifications else { return }
+
         isRequestingNotifications = true
         notificationError = ""
+        defer { isRequestingNotifications = false }
 
         do {
             _ = try await notificationCenter.requestAuthorization(
@@ -96,6 +135,5 @@ final class ProfileViewModel {
         }
 
         await refreshNotificationStatus()
-        isRequestingNotifications = false
     }
 }
