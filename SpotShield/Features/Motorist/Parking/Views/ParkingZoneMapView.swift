@@ -14,6 +14,7 @@ struct ParkingZoneMapView: View {
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedZoneID: String?
     @State private var selectedZone: ParkingZone?
+    @StateObject private var locationManager = LocationManager()
 
     var body: some View {
         Map(position: $cameraPosition, selection: $selectedZoneID) {
@@ -35,10 +36,28 @@ struct ParkingZoneMapView: View {
                 .tag(zone.id)
             }
         }
+        .overlay(alignment: .top) {
+            Text(locationManager.statusMessage(for: zones))
+                .font(AppTypography.bodySmall)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: 14)
+                )
+                .padding()
+        }
         .mapControls {
             MapCompass()
             MapScaleView()
             MapUserLocationButton()
+        }
+        .onAppear {
+            locationManager.requestLocationAccess()
+        }
+        .onDisappear {
+            locationManager.stopUpdatingLocation()
         }
         .onChange(of: selectedZoneID) { _, zoneID in
             guard let zoneID else {
