@@ -12,6 +12,7 @@ struct SpotShieldApp: App {
     @State private var appState: AppState
 
     init() {
+        NotificationManager.shared.configure()
         FirebaseConfig.configure()
         _appState = State(initialValue: AppState())
     }

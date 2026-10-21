@@ -65,6 +65,11 @@ struct ParkingSetupView: View {
                         .foregroundStyle(AppColors.statusOverstay)
                 }
 
+                if !viewModel.notificationMessage.isEmpty {
+                    Text(viewModel.notificationMessage)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
                 if !viewModel.successMessage.isEmpty {
                     Text(viewModel.successMessage)
                         .foregroundStyle(AppColors.statusValid)
@@ -182,6 +187,12 @@ struct ParkingSetupView: View {
                     Text("These are demo funds. No real money is involved.")
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
+
+                    Text(
+                        "Allow notifications to get a reminder before your paid parking expires. You can still park if you decline."
+                    )
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
 
                     Toggle(
                         "I am parked in this zone",
