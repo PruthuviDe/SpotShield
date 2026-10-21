@@ -26,10 +26,7 @@ struct RootCoordinatorView: View {
             case .signedIn(let profile):
                 switch profile.role {
                 case .motorist:
-                    motoristHomeView(
-                        profile: profile,
-                        activityParkingSessionId: $activityParkingSessionId
-                    )
+                    motoristHomeView(profile: profile)
                 case .warden:
                     wardenHomeView(profile: profile)
                 case .admin:
@@ -150,10 +147,7 @@ struct RootCoordinatorView: View {
         }
     }
     
-    private func motoristHomeView(
-        profile: UserProfile,
-        activityParkingSessionId: Binding<String?>
-    ) -> some View {
+    private func motoristHomeView(profile: UserProfile) -> some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: AppSpacing.medium) {
@@ -210,20 +204,11 @@ struct RootCoordinatorView: View {
                 }
                 .padding(AppSpacing.large)
             }
-            .navigationDestination(isPresented: Binding(
-                get: { activityParkingSessionId.wrappedValue != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        activityParkingSessionId.wrappedValue = nil
-                    }
-                }
-            )) {
-                if let sessionId = activityParkingSessionId.wrappedValue {
-                    ParkingSetupView(
-                        profile: profile,
-                        expectedSessionId: sessionId
-                    )
-                }
+            .navigationDestination(item: $activityParkingSessionId) { sessionId in
+                ParkingSetupView(
+                    profile: profile,
+                    expectedSessionId: sessionId
+                )
             }
         }
     }

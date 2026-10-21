@@ -26,7 +26,7 @@ final class LiveActivityManager {
             return
         }
 
-        await endExistingActivities()
+        await end()
 
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             return
@@ -49,18 +49,14 @@ final class LiveActivityManager {
     }
 
     func end() async {
-        await endExistingActivities()
+        for activity in Activity<ParkingActivityAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
     }
 
     func end(sessionId: String) async {
         for activity in Activity<ParkingActivityAttributes>.activities
             where activity.attributes.sessionId == sessionId {
-            await activity.end(nil, dismissalPolicy: .immediate)
-        }
-    }
-
-    private func endExistingActivities() async {
-        for activity in Activity<ParkingActivityAttributes>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
     }

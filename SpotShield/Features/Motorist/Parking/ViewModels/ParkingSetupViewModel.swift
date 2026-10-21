@@ -248,7 +248,7 @@ final class ParkingSetupViewModel {
         }
 
         do {
-            let savedSession = try await sessionRepository.getActiveSession(
+            let currentSession = try await sessionRepository.getActiveSession(
                 userId: profile.id
             )
 
@@ -257,8 +257,7 @@ final class ParkingSetupViewModel {
             }
 
             if let expectedSessionId,
-               savedSession?.id != expectedSessionId
-                || savedSession?.isActive != true {
+               currentSession?.id != expectedSessionId {
                 activeSession = nil
                 selectedExtensionMinutes = 0
                 await LiveActivityManager.shared.end(
@@ -269,8 +268,6 @@ final class ParkingSetupViewModel {
                 hasLoadedActiveSession = true
                 return
             }
-
-            let currentSession = savedSession?.isActive == true ? savedSession : nil
 
             if currentSession?.id != activeSession?.id
                 || currentSession?.durationMinutes != activeSession?.durationMinutes {
@@ -393,28 +390,15 @@ final class ParkingSetupViewModel {
 
             guard savedSession.isActive else {
                 activeSession = nil
-                hasLoadedActiveSession = false
-                sessionErrorMessage = ""
+                await loadActiveSession()
 
-                do {
-                    activeSession = try await sessionRepository.getActiveSession(
-                        userId: profile.id
-                    )
+                guard !Task.isCancelled else {
+                    return
+                }
 
-                    guard !Task.isCancelled else {
-                        return
-                    }
-
-                    hasLoadedActiveSession = true
+                if hasLoadedActiveSession {
                     successMessage =
                         "That earlier parking session has ended. No new charge was made."
-                } catch {
-                    guard !Task.isCancelled else {
-                        return
-                    }
-
-                    parkingErrorMessage =
-                        "That earlier session has ended, but current parking could not be checked. Please refresh."
                 }
 
                 return

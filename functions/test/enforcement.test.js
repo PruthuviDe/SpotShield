@@ -43,8 +43,27 @@ async function denied(action, status) {
   await assert.rejects(action, error => error.status === status);
 }
 
+async function signIn(user) {
+  const response = await fetch("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-api-key", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: user.email, password: user.password, returnSecureToken: true })
+  });
+  const result = await response.json();
+  assert.ok(result.idToken);
+  return result.idToken;
+}
+
 function reportRequest(licensePlate = plate, operationId = randomUUID()) {
   return { parkingZoneId: zoneId, licensePlate, operationId, notes: "Physically observed test vehicle", isConfirmed: true };
+}
+
+async function issueTicket(licensePlate = plate) {
+  const request = reportRequest(licensePlate);
+  await call("submitWardenObservation", users[1], request);
+  await call("reviewWardenObservation", users[0], {
+    observationId: request.operationId, action: "issueTicket", reason: "Confirmed test vehicle without paid parking"
+  });
+  return request.operationId;
 }
 
 async function directWrite(user, path, fields) {
@@ -80,19 +99,14 @@ async function cleanup() {
   await deleteApp(app);
 }
 
-test("manual enforcement, vehicle identity, recovery and protected writes", { timeout: 180000 }, async t => {
+test("parking enforcement, ticket payments, recovery and protected writes", { timeout: 180000 }, async t => {
   try {
     for (const user of users) {
-      const password = randomUUID();
+      user.password = randomUUID();
       user.email = user.id + "@example.com";
-      await auth.createUser({ uid: user.id, email: user.email, password });
+      await auth.createUser({ uid: user.id, email: user.email, password: user.password });
       authIds.push(user.id);
-      const response = await fetch("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-api-key", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email, password, returnSecureToken: true })
-      });
-      user.token = (await response.json()).idToken;
-      assert.ok(user.token);
+      user.token = await signIn(user);
     }
     const [admin, warden, driver, second, newDriver] = users;
     await seed("users/" + admin.id, { role: "Admin", name: "Test Admin", email: admin.email });
@@ -205,6 +219,116 @@ test("manual enforcement, vehicle identity, recovery and protected writes", { ti
       await denied(() => call("getMyTickets", warden), "PERMISSION_DENIED");
       const reviewed = await call("getReviewedWardenObservations", admin);
       assert.ok(reviewed.observations.some(row => row.id === ticketRequest.operationId));
+    });
+
+    await t.test("only the signed-in Motorist can change consent or pay an owned ticket", async () => {
+      for (const user of [null, admin, warden]) {
+        const status = user ? "PERMISSION_DENIED" : "UNAUTHENTICATED";
+        await denied(() => call("setTicketAutoDeduct", user, { enabled: true }), status);
+        await denied(() => call("payTicket", user, { ticketId: ticketRequest.operationId }), status);
+      }
+      await denied(() => call("setTicketAutoDeduct", driver, { enabled: "true" }), "INVALID_ARGUMENT");
+      await denied(() => call("payTicket", driver, { ticketId: "invalid/id" }), "INVALID_ARGUMENT");
+      await denied(() => call("payTicket", second, { ticketId: ticketRequest.operationId }), "NOT_FOUND");
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 1800);
+      assert.equal((await database.doc("wallets/" + second.id).get()).get("balanceLKR"), 2000);
+    });
+
+    let autoPaidTicketId;
+    await t.test("new tickets with consent and enough funds are paid exactly once even when issue is retried", async () => {
+      await call("setTicketAutoDeduct", driver, { enabled: true, userId: second.id });
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("autoDeductEnabled"), true);
+      assert.equal((await database.doc("wallets/" + second.id).get()).get("autoDeductEnabled"), false);
+      const request = reportRequest();
+      await call("submitWardenObservation", warden, request);
+      const decision = { observationId: request.operationId, action: "issueTicket", reason: "Auto-payment test" };
+      await Promise.all([call("reviewWardenObservation", admin, decision), call("reviewWardenObservation", admin, decision)]);
+      autoPaidTicketId = request.operationId;
+      const ticket = await database.doc("simulatedTickets/" + autoPaidTicketId).get();
+      const payments = await database.collection("wallets/" + driver.id + "/transactions").where("ticketId", "==", autoPaidTicketId).get();
+      assert.equal(ticket.get("paymentStatus"), "Paid");
+      assert.equal(payments.size, 1);
+      assert.equal(payments.docs[0].get("amountLKR"), 1000);
+      assert.equal(payments.docs[0].get("balanceAfterLKR"), 800);
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 800);
+      assert.equal((await database.doc("simulatedTickets/" + ticketRequest.operationId).get()).get("paymentStatus"), "Due");
+      await call("payTicket", driver, { ticketId: autoPaidTicketId });
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 800);
+      assert.equal((await database.collection("wallets/" + driver.id + "/transactions").where("ticketId", "==", autoPaidTicketId).get()).size, 1);
+    });
+
+    let insufficientTicketId;
+    await t.test("insufficient funds leave automatic and manual payments due without a partial charge", async () => {
+      insufficientTicketId = await issueTicket();
+      const ticket = await database.doc("simulatedTickets/" + insufficientTicketId).get();
+      assert.equal(ticket.get("paymentStatus"), "Due");
+      assert.match(ticket.get("paymentMessage"), /Not enough demo funds/);
+      await denied(() => call("payTicket", driver, { ticketId: insufficientTicketId }), "FAILED_PRECONDITION");
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 800);
+      assert.equal((await database.doc("wallets/" + driver.id + "/transactions/ticket-payment-" + insufficientTicketId).get()).exists, false);
+      assert.equal((await database.doc("simulatedTickets/" + insufficientTicketId).get()).get("paymentStatus"), "Due");
+    });
+
+    await t.test("top-up and consent changes never charge existing due tickets", async () => {
+      await call("setTicketAutoDeduct", driver, { enabled: false });
+      await call("topUpWallet", driver, { amountLKR: 1000, operationId: randomUUID() });
+      await call("setTicketAutoDeduct", driver, { enabled: true });
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 1800);
+      for (const ticketId of [ticketRequest.operationId, insufficientTicketId]) {
+        assert.equal((await database.doc("simulatedTickets/" + ticketId).get()).get("paymentStatus"), "Due");
+        assert.equal((await database.doc("wallets/" + driver.id + "/transactions/ticket-payment-" + ticketId).get()).exists, false);
+      }
+    });
+
+    await t.test("concurrent manual retries produce one debit and one ticket ledger row", async () => {
+      const request = { ticketId: ticketRequest.operationId };
+      const results = await Promise.all([call("payTicket", driver, request), call("payTicket", driver, request), call("payTicket", driver, request)]);
+      assert.ok(results.every(result => result.paymentStatus === "Paid"));
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 800);
+      const ticket = await database.doc("simulatedTickets/" + request.ticketId).get();
+      assert.equal(ticket.get("paymentStatus"), "Paid");
+      assert.equal(ticket.get("paymentMethod"), "Manual");
+      const payments = await database.collection("wallets/" + driver.id + "/transactions").where("ticketId", "==", request.ticketId).get();
+      assert.equal(payments.size, 1);
+      assert.equal(payments.docs[0].get("type"), "Ticket Payment");
+      assert.equal(payments.docs[0].get("amountLKR"), 1000);
+      assert.equal(payments.docs[0].get("balanceAfterLKR"), 800);
+      const path = `wallets/${driver.id}/transactions/${payments.docs[0].id}`;
+      const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/${path}`;
+      assert.equal((await fetch(url, { headers: { Authorization: "Bearer " + driver.token } })).status, 200);
+      assert.equal((await fetch(url, { headers: { Authorization: "Bearer " + second.token } })).status, 403);
+    });
+
+    await t.test("fresh sign-in reloads saved Paid and Due outcomes for Motorist and Admin", async () => {
+      driver.token = await signIn(driver);
+      admin.token = await signIn(admin);
+      const mine = await call("getMyTickets", driver);
+      const reviewed = await call("getReviewedWardenObservations", admin);
+      for (const [id, status] of [[autoPaidTicketId, "Paid"], [ticketRequest.operationId, "Paid"], [insufficientTicketId, "Due"]]) {
+        assert.equal(mine.tickets.find(ticket => ticket.id === id).paymentStatus, status);
+        assert.equal(reviewed.observations.find(observation => observation.id === id).ticketPaymentStatus, status);
+      }
+      assert.equal((await call("getMyTickets", second)).tickets.length, 0);
+    });
+
+    await t.test("different tickets paid concurrently cannot overdraw the same wallet", async () => {
+      await call("setTicketAutoDeduct", driver, { enabled: false });
+      await call("topUpWallet", driver, { amountLKR: 1000, operationId: randomUUID() });
+      const otherTicketId = await issueTicket();
+      const ids = [insufficientTicketId, otherTicketId];
+      const results = await Promise.allSettled(ids.map(ticketId => call("payTicket", driver, { ticketId })));
+      assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+      assert.equal(results.find(result => result.status === "rejected").reason.status, "FAILED_PRECONDITION");
+      assert.equal((await database.doc("wallets/" + driver.id).get()).get("balanceLKR"), 800);
+      const statuses = [];
+      let paymentCount = 0;
+      for (const ticketId of ids) {
+        statuses.push((await database.doc("simulatedTickets/" + ticketId).get()).get("paymentStatus"));
+        const payments = await database.collection("wallets/" + driver.id + "/transactions").where("ticketId", "==", ticketId).get();
+        paymentCount += payments.size;
+      }
+      assert.deepEqual(statuses.sort(), ["Due", "Paid"]);
+      assert.equal(paymentCount, 1);
     });
 
     await t.test("outside hours, inactive zones, changed policy and ended assignment block enforcement", async () => {
