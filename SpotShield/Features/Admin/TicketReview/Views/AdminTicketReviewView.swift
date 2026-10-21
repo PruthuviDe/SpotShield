@@ -39,6 +39,12 @@ struct AdminTicketReviewView: View {
                     ForEach(viewModel.observations) { observation in
                         observationCard(observation)
                     }
+
+                    if viewModel.observations.count == 50 {
+                        Text("Showing the latest 50 observations.")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
                 }
 
                 Button("Refresh") {

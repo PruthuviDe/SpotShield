@@ -89,7 +89,7 @@ exports.getWardenObservations = onCall(async request => {
 exports.getPendingWardenObservations = onCall(async request => {
   await database.runTransaction(transaction => requireRole(transaction, request.auth?.uid, "Admin"));
   const result = await database.collection("wardenObservations").where("reviewStatus", "==", "Awaiting Review").get();
-  return { observations: observationRows(result) };
+  return { observations: observationRows(result), totalCount: result.size };
 });
 
 exports.getReviewedWardenObservations = onCall(async request => {

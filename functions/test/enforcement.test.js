@@ -405,6 +405,32 @@ test("parking enforcement, ticket payments, recovery and protected writes", { ti
       assert.equal((await ticketRef.get()).get("userId"), "");
     });
 
+    await t.test("Admin overview counts the full pending queue beyond the latest 50 rows", async () => {
+      const before = await database.collection("wardenObservations").where("reviewStatus", "==", "Awaiting Review").get();
+      const overviewDocuments = [];
+      try {
+        for (let index = 0; index < 51; index += 1) {
+          const path = "wardenObservations/" + prefix + "-overview-" + index;
+          overviewDocuments.push(database.doc(path));
+          await seed(path, {
+            wardenUserId: warden.id, parkingZoneId: zoneId,
+            zoneName: "Overview test zone", licensePlate: plate,
+            observedAt: Timestamp.fromMillis(Date.now() + index),
+            reviewStatus: "Awaiting Review", isViolation: true,
+            parkingStatus: "No Check-in", notes: "Overview count fixture"
+          });
+        }
+        const result = await call("getPendingWardenObservations", admin);
+        assert.equal(result.totalCount, before.size + 51);
+        assert.equal(result.observations.length, 50);
+        await denied(() => call("getPendingWardenObservations", driver), "PERMISSION_DENIED");
+        await denied(() => call("getPendingWardenObservations", warden), "PERMISSION_DENIED");
+        await denied(() => call("getPendingWardenObservations", null), "UNAUTHENTICATED");
+      } finally {
+        for (const document of overviewDocuments) await document.delete();
+      }
+    });
+
     await t.test("client writes cannot bypass identity, roles, wallets or ticket decisions", async () => {
       const attempts = [
         ["vehicles/" + prefix + "-forged", { ownerUserId: { stringValue: driver.id }, licensePlate: { stringValue: plate }, make: { stringValue: "" }, model: { stringValue: "" } }],

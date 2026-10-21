@@ -123,6 +123,20 @@ final class WardenObservationRepository {
         return try readObservations(from: result.data)
     }
 
+    func getPendingObservationCount() async throws -> Int {
+        let result = try await functions
+            .httpsCallable("getPendingWardenObservations")
+            .call()
+
+        guard let data = result.data as? [String: Any],
+              let count = data["totalCount"] as? Int,
+              count >= 0 else {
+            throw repositoryError("Could not load the pending observation count.")
+        }
+
+        return count
+    }
+
     func getReviewedObservations() async throws -> [WardenObservation] {
         let result = try await functions.httpsCallable("getReviewedWardenObservations").call()
         return try readObservations(from: result.data)

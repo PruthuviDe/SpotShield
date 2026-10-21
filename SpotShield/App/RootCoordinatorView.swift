@@ -270,57 +270,9 @@ struct RootCoordinatorView: View {
     
     private func adminHomeView(profile: UserProfile) -> some View {
         NavigationStack {
-               VStack(spacing: AppSpacing.medium) {
-                   Text("Welcome, \(profile.name)")
-                       .font(AppTypography.titleMedium)
-
-                   Text("Admin Dashboard")
-                       .font(AppTypography.caption)
-                       .foregroundStyle(AppColors.textSecondary)
-
-                   NavigationLink {
-                       ParkingZonesView()
-                   } label: {
-                       Text("Parking Zones")
-                   }
-                   .buttonStyle(.borderedProminent)
-
-                   NavigationLink {
-                       WardenAssignmentsView(adminUserId: profile.id)
-                   } label: {
-                       Text("Warden Assignments")
-                   }
-                   .buttonStyle(.borderedProminent)
-
-                   NavigationLink {
-                       WardenRequestsView(adminUserId: profile.id)
-                   } label: {
-                       Text("Warden Applications")
-                   }
-                   .buttonStyle(.borderedProminent)
-
-                   NavigationLink {
-                       AdminTicketReviewView()
-                   } label: {
-                       Text("Review Observations")
-                   }
-                   .buttonStyle(.borderedProminent)
-
-                   NavigationLink {
-                       ProfileView(profile: profile)
-                   } label: {
-                       Text("Profile & Settings")
-                   }
-                   .buttonStyle(.borderedProminent)
-
-                   Button("Sign Out") {
-                       appState.signOut()
-                   }
-                   .buttonStyle(.borderedProminent)
-               }
-               .padding(AppSpacing.large)
-           }
-       }
+            AdminOverviewView(profile: profile)
+        }
+    }
 }
 
 private struct ActiveParkingCard: View {
