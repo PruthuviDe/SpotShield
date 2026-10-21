@@ -12,6 +12,7 @@ struct RootCoordinatorView: View {
     @State private var showSignIn = false
     @State private var showSignUp = false
     @State private var showStaffSignIn = false
+    @State private var activityParkingSessionId: String?
     
     var body: some View {
         Group {
@@ -25,7 +26,10 @@ struct RootCoordinatorView: View {
             case .signedIn(let profile):
                 switch profile.role {
                 case .motorist:
-                    motoristHomeView(profile: profile)
+                    motoristHomeView(
+                        profile: profile,
+                        activityParkingSessionId: $activityParkingSessionId
+                    )
                 case .warden:
                     wardenHomeView(profile: profile)
                 case .admin:
@@ -60,6 +64,18 @@ struct RootCoordinatorView: View {
                 errorView(message: message)
             }
         }
+        .onOpenURL(perform: handleActivityLink)
+    }
+
+    private func handleActivityLink(_ url: URL) {
+        guard url.scheme == "spotshield",
+              url.host == "parking",
+              let sessionId = url.pathComponents.dropFirst().first,
+              !sessionId.isEmpty else {
+            return
+        }
+
+        activityParkingSessionId = sessionId
     }
     
     private var loadingView: some View {
@@ -134,7 +150,10 @@ struct RootCoordinatorView: View {
         }
     }
     
-    private func motoristHomeView(profile: UserProfile) -> some View {
+    private func motoristHomeView(
+        profile: UserProfile,
+        activityParkingSessionId: Binding<String?>
+    ) -> some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: AppSpacing.medium) {
@@ -190,6 +209,21 @@ struct RootCoordinatorView: View {
                     .buttonStyle(.borderedProminent)
                 }
                 .padding(AppSpacing.large)
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { activityParkingSessionId.wrappedValue != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        activityParkingSessionId.wrappedValue = nil
+                    }
+                }
+            )) {
+                if let sessionId = activityParkingSessionId.wrappedValue {
+                    ParkingSetupView(
+                        profile: profile,
+                        expectedSessionId: sessionId
+                    )
+                }
             }
         }
     }

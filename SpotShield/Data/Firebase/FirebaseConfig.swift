@@ -14,7 +14,18 @@ import FirebaseFunctions
 enum FirebaseConfig {
     static func configure() {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["SPOTSHIELD_USE_EMULATORS"] == "1" {
+        let environment = ProcessInfo.processInfo.environment
+        let defaults = UserDefaults.standard
+
+        if let emulatorSetting = environment["SPOTSHIELD_USE_EMULATORS"] {
+            defaults.set(emulatorSetting == "1", forKey: "SPOTSHIELD_USE_EMULATORS")
+        }
+
+        if let host = environment["SPOTSHIELD_EMULATOR_HOST"], !host.isEmpty {
+            defaults.set(host, forKey: "SPOTSHIELD_EMULATOR_HOST")
+        }
+
+        if defaults.bool(forKey: "SPOTSHIELD_USE_EMULATORS") {
             let options = FirebaseOptions(
                 googleAppID: "1:1234567890:ios:0123456789abcdef",
                 gcmSenderID: "1234567890"
@@ -25,7 +36,7 @@ enum FirebaseConfig {
             #if targetEnvironment(simulator)
             let host = "127.0.0.1"
             #else
-            let host = ProcessInfo.processInfo.environment["SPOTSHIELD_EMULATOR_HOST"] ?? "localhost"
+            let host = defaults.string(forKey: "SPOTSHIELD_EMULATOR_HOST") ?? "localhost"
             #endif
 
             FirebaseApp.configure(options: options)

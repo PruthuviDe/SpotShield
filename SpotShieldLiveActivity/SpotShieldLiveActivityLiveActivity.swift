@@ -15,25 +15,30 @@ struct SpotShieldLiveActivityLiveActivity: Widget {
             VStack(alignment: .leading, spacing: 12) {
                 Text(context.attributes.zoneName)
                     .font(.headline)
+                    .foregroundStyle(Color.black)
 
                 HStack {
                     Text("Parking active")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.gray)
 
                     Spacer()
 
                     countdown(until: context.state.paidUntil)
                         .font(.title2.bold())
+                        .foregroundStyle(Color.black)
                 }
 
                 Text(
                     "Paid until \(context.state.paidUntil.formatted(date: .omitted, time: .shortened))"
                 )
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.gray)
             }
             .padding()
             .activityBackgroundTint(.white)
             .activitySystemActionForegroundColor(.black)
+            .widgetURL(
+                URL(string: "spotshield://parking/\(context.attributes.sessionId)")
+            )
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -64,6 +69,9 @@ struct SpotShieldLiveActivityLiveActivity: Widget {
                 Image(systemName: "car.fill")
             }
             .keylineTint(.green)
+            .widgetURL(
+                URL(string: "spotshield://parking/\(context.attributes.sessionId)")
+            )
         }
     }
 

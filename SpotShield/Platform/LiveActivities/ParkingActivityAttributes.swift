@@ -13,5 +13,6 @@ nonisolated struct ParkingActivityAttributes: ActivityAttributes {
         var paidUntil: Date
     }
 
+    var sessionId: String
     var zoneName: String
 }

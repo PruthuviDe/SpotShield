@@ -27,6 +27,7 @@ final class ParkingSetupViewModel {
     var isParkedHere = false
 
     private let profile: UserProfile
+    private let expectedSessionId: String?
     private let userRepository = UserProfileRepository()
     private let sessionRepository = ParkingSessionRepository()
 
@@ -34,8 +35,9 @@ final class ParkingSetupViewModel {
     private var pendingRequestKey = ""
     private var pendingOperationId = ""
 
-    init(profile: UserProfile) {
+    init(profile: UserProfile, expectedSessionId: String? = nil) {
         self.profile = profile
+        self.expectedSessionId = expectedSessionId
     }
 
     var isBusy: Bool {
@@ -254,12 +256,35 @@ final class ParkingSetupViewModel {
                 return
             }
 
-            if savedSession?.id != activeSession?.id
-                || savedSession?.durationMinutes != activeSession?.durationMinutes {
+            if let expectedSessionId,
+               savedSession?.id != expectedSessionId
+                || savedSession?.isActive != true {
+                activeSession = nil
+                selectedExtensionMinutes = 0
+                await LiveActivityManager.shared.end(
+                    sessionId: expectedSessionId
+                )
+                sessionErrorMessage =
+                    "This parking activity is no longer active for your account."
+                hasLoadedActiveSession = true
+                return
+            }
+
+            let currentSession = savedSession?.isActive == true ? savedSession : nil
+
+            if currentSession?.id != activeSession?.id
+                || currentSession?.durationMinutes != activeSession?.durationMinutes {
                 selectedExtensionMinutes = 0
             }
 
-            activeSession = savedSession
+            activeSession = currentSession
+
+            if let currentSession {
+                await LiveActivityManager.shared.start(for: currentSession)
+            } else {
+                await LiveActivityManager.shared.end()
+            }
+
             hasLoadedActiveSession = true
         } catch {
             guard !Task.isCancelled else {
@@ -396,6 +421,7 @@ final class ParkingSetupViewModel {
             }
 
             activeSession = savedSession
+            await LiveActivityManager.shared.start(for: savedSession)
             successMessage = "Parking started. LKR \(price) paid from your demo wallet."
         } catch {
             parkingErrorMessage =
@@ -433,6 +459,8 @@ final class ParkingSetupViewModel {
             guard !Task.isCancelled else {
                 return
             }
+
+            await LiveActivityManager.shared.end(sessionId: session.id)
 
             activeSession = nil
             hasLoadedActiveSession = false

@@ -13,13 +13,27 @@ final class LiveActivityManager {
     static let shared = LiveActivityManager()
 
     func start(for session: ParkingSession) async {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+        let activities = Activity<ParkingActivityAttributes>.activities
+
+        if let activity = activities.first(where: {
+            $0.attributes.sessionId == session.id
+        }) {
+            for otherActivity in activities where otherActivity.id != activity.id {
+                await otherActivity.end(nil, dismissalPolicy: .immediate)
+            }
+
+            await activity.update(content(for: session))
             return
         }
 
         await endExistingActivities()
 
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            return
+        }
+
         let attributes = ParkingActivityAttributes(
+            sessionId: session.id,
             zoneName: session.zoneName
         )
 
@@ -34,16 +48,15 @@ final class LiveActivityManager {
         }
     }
 
-    func update(for session: ParkingSession) async {
-        guard let activity = Activity<ParkingActivityAttributes>.activities.first else {
-            return
-        }
-
-        await activity.update(content(for: session))
-    }
-
     func end() async {
         await endExistingActivities()
+    }
+
+    func end(sessionId: String) async {
+        for activity in Activity<ParkingActivityAttributes>.activities
+            where activity.attributes.sessionId == sessionId {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
     }
 
     private func endExistingActivities() async {

@@ -21,10 +21,13 @@ struct ParkingSetupView: View {
         )
     }
 
-    init(profile: UserProfile) {
+    init(profile: UserProfile, expectedSessionId: String? = nil) {
         self.zone = nil
         _viewModel = State(
-            initialValue: ParkingSetupViewModel(profile: profile)
+            initialValue: ParkingSetupViewModel(
+                profile: profile,
+                expectedSessionId: expectedSessionId
+            )
         )
     }
 
