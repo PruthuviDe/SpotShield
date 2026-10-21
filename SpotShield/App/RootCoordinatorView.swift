@@ -206,6 +206,13 @@ struct RootCoordinatorView: View {
                         .buttonStyle(.borderedProminent)
                     }
 
+                    NavigationLink {
+                        ProfileView(profile: profile)
+                    } label: {
+                        Text("Profile & Settings")
+                    }
+                    .buttonStyle(.borderedProminent)
+
                     Button("Sign Out") {
                         appState.signOut()
                     }
@@ -243,6 +250,13 @@ struct RootCoordinatorView: View {
                     WardenRecordsView()
                 } label: {
                     Text("My Observations")
+                }
+                .buttonStyle(.borderedProminent)
+
+                NavigationLink {
+                    ProfileView(profile: profile)
+                } label: {
+                    Text("Profile & Settings")
                 }
                 .buttonStyle(.borderedProminent)
                 
@@ -289,6 +303,13 @@ struct RootCoordinatorView: View {
                        AdminTicketReviewView()
                    } label: {
                        Text("Review Observations")
+                   }
+                   .buttonStyle(.borderedProminent)
+
+                   NavigationLink {
+                       ProfileView(profile: profile)
+                   } label: {
+                       Text("Profile & Settings")
                    }
                    .buttonStyle(.borderedProminent)
 
