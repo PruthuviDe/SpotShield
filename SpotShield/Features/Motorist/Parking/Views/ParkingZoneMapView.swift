@@ -21,6 +21,22 @@ struct ParkingZoneMapView: View {
             UserAnnotation()
 
             ForEach(zones) { zone in
+                MapCircle(
+                    center: CLLocationCoordinate2D(
+                        latitude: zone.latitude,
+                        longitude: zone.longitude
+                    ),
+                    radius: zone.radiusMeters
+                )
+                .foregroundStyle(
+                    circleColor(for: zone)
+                        .opacity(circleOpacity(for: zone))
+                )
+                .stroke(
+                    circleColor(for: zone),
+                    lineWidth: selectedZoneID == zone.id ? 3 : 1
+                )
+
                 Marker(
                     zone.name,
                     coordinate: CLLocationCoordinate2D(
@@ -79,5 +95,21 @@ struct ParkingZoneMapView: View {
         }
         .navigationTitle("Parking Map")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func circleColor(for zone: ParkingZone) -> Color {
+        if selectedZoneID == zone.id || zone.isActive {
+            return AppColors.accent
+        }
+
+        return AppColors.textSecondary
+    }
+
+    private func circleOpacity(for zone: ParkingZone) -> Double {
+        if selectedZoneID == zone.id {
+            return 0.24
+        }
+
+        return zone.isActive ? 0.10 : 0.05
     }
 }
