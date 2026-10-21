@@ -61,33 +61,38 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
             return locationError ?? "Finding your location…"
         }
 
-        guard let closestZone = zones.min(by: { firstZone, secondZone in
-            let firstLocation = CLLocation(
-                latitude: firstZone.latitude,
-                longitude: firstZone.longitude
+        let zoneDistances = zones.map { zone in
+            let zoneLocation = CLLocation(
+                latitude: zone.latitude,
+                longitude: zone.longitude
             )
-            let secondLocation = CLLocation(
-                latitude: secondZone.latitude,
-                longitude: secondZone.longitude
+            return (
+                zone: zone,
+                meters: location.distance(from: zoneLocation)
             )
+        }
 
-            return location.distance(from: firstLocation)
-                < location.distance(from: secondLocation)
+        guard let closestZone = zoneDistances.min(by: {
+            $0.meters < $1.meters
         }) else {
             return "No parking zones are available."
         }
 
-        let zoneLocation = CLLocation(
-            latitude: closestZone.latitude,
-            longitude: closestZone.longitude
-        )
-        let distance = location.distance(from: zoneLocation)
-
-        if distance <= closestZone.radiusMeters {
-            return "You appear to be inside \(closestZone.name). Select it to continue."
+        let containingZones = zoneDistances.filter {
+            $0.meters <= $0.zone.radiusMeters
         }
 
-        return "Closest zone: \(closestZone.name), about \(Int(distance.rounded())) m away."
+        if containingZones.count > 1 {
+            return "You appear to be inside multiple parking zones. "
+                + "Select the correct zone to continue."
+        }
+
+        if let zone = containingZones.first?.zone {
+            return "You appear to be inside \(zone.name). Select it to continue."
+        }
+
+        return "Closest zone: \(closestZone.zone.name), "
+            + "about \(Int(closestZone.meters.rounded())) m away."
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
