@@ -53,7 +53,10 @@ final class AppState {
     func loadUserProfile() {
         profileTask?.cancel()
 
-        guard let userId = auth.currentUser?.uid else {
+        let userId = auth.currentUser?.uid
+        NotificationManager.shared.updateSignedInUser(userId)
+
+        guard let userId else {
             authState = .signedOut
             return
         }
@@ -186,6 +189,10 @@ final class AppState {
     func signOut() {
         do {
             try authService.signOut()
+            NotificationManager.shared.updateSignedInUser(nil)
+            Task {
+                await LiveActivityManager.shared.end()
+            }
             profileTask?.cancel()
             authState = .signedOut
         } catch {

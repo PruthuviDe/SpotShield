@@ -21,7 +21,6 @@ final class ParkingSetupViewModel {
     var errorMessage = ""
     var sessionErrorMessage = ""
     var parkingErrorMessage = ""
-    var notificationMessage = ""
     var successMessage = ""
     var selectedMinutes = 0
     var selectedExtensionMinutes = 0
@@ -45,6 +44,12 @@ final class ParkingSetupViewModel {
     var isBusy: Bool {
         isLoading || isLoadingSession || isStartingParking
             || isEndingParking || isExtendingParking
+    }
+
+    var notificationMessage: String {
+        notificationManager.isParkingReminderUnavailable
+            ? "The expiry reminder could not be scheduled. Check Settings > Notifications > SpotShield. Parking still works."
+            : ""
     }
 
     func availableDurations(
@@ -258,11 +263,20 @@ final class ParkingSetupViewModel {
                 return
             }
 
+            _ = await notificationManager.updateParkingExpiryReminder(
+                for: currentSession,
+                userId: profile.id
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+
             if let expectedSessionId,
                currentSession?.id != expectedSessionId {
                 activeSession = nil
                 selectedExtensionMinutes = 0
-                notificationManager.cancelParkingExpiryReminder(
+                await notificationManager.cancelParkingExpiryReminder(
                     sessionId: expectedSessionId
                 )
                 await LiveActivityManager.shared.end(
@@ -283,12 +297,6 @@ final class ParkingSetupViewModel {
 
             if let currentSession {
                 await LiveActivityManager.shared.start(for: currentSession)
-                let reminderScheduled = await notificationManager
-                    .scheduleParkingExpiryReminder(for: currentSession)
-
-                if reminderScheduled {
-                    notificationMessage = ""
-                }
             } else {
                 await LiveActivityManager.shared.end()
             }
@@ -319,7 +327,6 @@ final class ParkingSetupViewModel {
         }
 
         parkingErrorMessage = ""
-        notificationMessage = ""
         successMessage = ""
 
         guard hasLoadedActiveSession else {
@@ -369,13 +376,7 @@ final class ParkingSetupViewModel {
             isStartingParking = false
         }
 
-        let canScheduleReminder =
-            await notificationManager.requestParkingReminderPermission()
-
-        if !canScheduleReminder {
-            notificationMessage =
-                "Expiry reminders are off. You can allow them in Settings > Notifications > SpotShield. Parking still works."
-        }
+        _ = await notificationManager.requestParkingReminderPermission()
 
         guard !Task.isCancelled else {
             return
@@ -431,17 +432,10 @@ final class ParkingSetupViewModel {
             activeSession = savedSession
             await LiveActivityManager.shared.start(for: savedSession)
 
-            if canScheduleReminder {
-                let reminderScheduled =
-                    await notificationManager.scheduleParkingExpiryReminder(
-                        for: savedSession
-                    )
-
-                if !reminderScheduled {
-                    notificationMessage =
-                        "Parking started, but its expiry reminder could not be scheduled. Check notification settings."
-                }
-            }
+            _ = await notificationManager.updateParkingExpiryReminder(
+                for: savedSession,
+                userId: profile.id
+            )
 
             successMessage = "Parking started. LKR \(price) paid from your demo wallet."
         } catch {
@@ -477,7 +471,7 @@ final class ParkingSetupViewModel {
                 sessionId: session.id
             )
 
-            notificationManager.cancelParkingExpiryReminder(
+            await notificationManager.cancelParkingExpiryReminder(
                 sessionId: session.id
             )
 

@@ -6,13 +6,22 @@
 //
 
 import Foundation
+import Observation
 import UserNotifications
 
 @MainActor
+@Observable
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
 
+    var parkingSessionToOpen: String?
+    private(set) var isParkingReminderUnavailable = false
+
     private let center = UNUserNotificationCenter.current()
+    private var signedInUserId: String?
+    private var hasLoadedAccount = false
+    private var reminderVersion = UUID()
+    private var scheduledSessionId: String?
 
     private override init() {
         super.init()
@@ -22,41 +31,105 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         center.delegate = self
     }
 
+    func updateSignedInUser(_ userId: String?) {
+        guard !hasLoadedAccount || signedInUserId != userId else {
+            return
+        }
+
+        hasLoadedAccount = true
+        signedInUserId = userId
+        isParkingReminderUnavailable = false
+        scheduledSessionId = nil
+        reminderVersion = UUID()
+        let version = reminderVersion
+
+        Task {
+            await clearParkingReminders(keepingUserId: userId, version: version)
+        }
+    }
+
+    func updateParkingExpiryReminder(
+        for session: ParkingSession?,
+        userId: String
+    ) async -> Bool {
+        guard signedInUserId == userId, !Task.isCancelled else {
+            return false
+        }
+
+        if let session, session.userId != userId {
+            return false
+        }
+
+        guard let session, session.isActive, session.paidUntil > Date() else {
+            await cancelParkingExpiryReminders(userId: userId)
+            return signedInUserId == userId && !Task.isCancelled
+        }
+
+        return await scheduleParkingExpiryReminder(for: session)
+    }
+
     func requestParkingReminderPermission() async -> Bool {
+        let userId = signedInUserId
         let settings = await center.notificationSettings()
+        let allowed: Bool
 
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
-            return true
+            allowed = true
 
         case .denied:
-            return false
+            allowed = false
 
         case .notDetermined:
             do {
-                return try await center.requestAuthorization(
+                allowed = try await center.requestAuthorization(
                     options: [.alert, .sound]
                 )
             } catch {
-                return false
+                allowed = false
             }
 
         @unknown default:
-            return false
+            allowed = false
         }
+
+        if signedInUserId == userId {
+            isParkingReminderUnavailable = !allowed
+        }
+
+        return allowed
     }
 
     func scheduleParkingExpiryReminder(
         for session: ParkingSession
     ) async -> Bool {
-        cancelParkingExpiryReminder(sessionId: session.id)
+        guard signedInUserId == session.userId, !Task.isCancelled else {
+            return false
+        }
 
-        guard await notificationsAreAllowed() else {
+        reminderVersion = UUID()
+        let version = reminderVersion
+        scheduledSessionId = session.id
+        await clearParkingReminders(version: version)
+
+        guard isCurrentReminder(version: version, userId: session.userId) else {
+            return false
+        }
+
+        let allowed = await notificationsAreAllowed()
+
+        guard isCurrentReminder(version: version, userId: session.userId) else {
+            return false
+        }
+
+        guard allowed else {
+            isParkingReminderUnavailable = true
             return false
         }
 
         guard session.isActive,
               session.paidUntil > Date() else {
+            isParkingReminderUnavailable = false
             return false
         }
 
@@ -87,6 +160,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.title = "Parking expiry reminder"
         content.body = message
         content.sound = .default
+        content.userInfo = [
+            "parkingSessionId": session.id,
+            "userId": session.userId
+        ]
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: max(1, secondsUntilReminder),
@@ -94,27 +171,92 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         )
 
         let request = UNNotificationRequest(
-            identifier: reminderIdentifier(sessionId: session.id),
+            identifier: "parking-expiry-\(session.id)-\(version.uuidString)",
             content: content,
             trigger: trigger
         )
 
         do {
             try await center.add(request)
+
+            guard isCurrentReminder(version: version, userId: session.userId) else {
+                removeReminders(identifiers: [request.identifier])
+                return false
+            }
+
+            isParkingReminderUnavailable = false
             return true
         } catch {
+            if isCurrentReminder(version: version, userId: session.userId) {
+                isParkingReminderUnavailable = true
+            }
             return false
         }
     }
 
-    func cancelParkingExpiryReminder(sessionId: String) {
-        let identifier = reminderIdentifier(sessionId: sessionId)
+    func cancelParkingExpiryReminder(sessionId: String) async {
+        if scheduledSessionId == sessionId {
+            reminderVersion = UUID()
+            scheduledSessionId = nil
+            isParkingReminderUnavailable = false
+        }
 
+        await clearParkingReminders(sessionId: sessionId, version: reminderVersion)
+    }
+
+    private func cancelParkingExpiryReminders(userId: String) async {
+        guard signedInUserId == userId else {
+            return
+        }
+
+        reminderVersion = UUID()
+        scheduledSessionId = nil
+        isParkingReminderUnavailable = false
+        await clearParkingReminders(version: reminderVersion)
+    }
+
+    private func clearParkingReminders(
+        sessionId: String? = nil,
+        keepingUserId: String? = nil,
+        version: UUID
+    ) async {
+        let pending = await center.pendingNotificationRequests()
+        let delivered = await center.deliveredNotifications()
+
+        guard reminderVersion == version else {
+            return
+        }
+
+        var identifiers: [String] = []
+
+        for request in pending + delivered.map({ $0.request }) {
+            guard request.identifier.hasPrefix("parking-expiry-") else {
+                continue
+            }
+
+            if let keepingUserId,
+               request.content.userInfo["userId"] as? String == keepingUserId {
+                continue
+            }
+
+            if let sessionId,
+               request.content.userInfo["parkingSessionId"] as? String != sessionId,
+               request.identifier != "parking-expiry-\(sessionId)" {
+                continue
+            }
+
+            identifiers.append(request.identifier)
+        }
+
+        removeReminders(identifiers: identifiers)
+    }
+
+    private func removeReminders(identifiers: [String]) {
         center.removePendingNotificationRequests(
-            withIdentifiers: [identifier]
+            withIdentifiers: identifiers
         )
         center.removeDeliveredNotifications(
-            withIdentifiers: [identifier]
+            withIdentifiers: identifiers
         )
     }
 
@@ -122,7 +264,32 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        if notification.request.identifier.hasPrefix("parking-expiry-") {
+            guard let userId = notification.request.content.userInfo["userId"] as? String,
+                  userId == signedInUserId else {
+                return []
+            }
+        }
+
+        return [.banner, .sound]
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let request = response.notification.request
+
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              request.identifier.hasPrefix("parking-expiry-"),
+              let sessionId = request.content.userInfo["parkingSessionId"] as? String,
+              !sessionId.isEmpty,
+              let userId = request.content.userInfo["userId"] as? String,
+              signedInUserId == nil || signedInUserId == userId else {
+            return
+        }
+
+        parkingSessionToOpen = sessionId
     }
 
     private func notificationsAreAllowed() async -> Bool {
@@ -133,7 +300,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             || settings.authorizationStatus == .ephemeral
     }
 
-    private func reminderIdentifier(sessionId: String) -> String {
-        "parking-expiry-\(sessionId)"
+    private func isCurrentReminder(version: UUID, userId: String) -> Bool {
+        reminderVersion == version && signedInUserId == userId && !Task.isCancelled
     }
 }

@@ -13,6 +13,7 @@ struct RootCoordinatorView: View {
     @State private var showSignUp = false
     @State private var showStaffSignIn = false
     @State private var activityParkingSessionId: String?
+    @State private var notificationManager = NotificationManager.shared
     
     var body: some View {
         Group {
@@ -62,6 +63,14 @@ struct RootCoordinatorView: View {
             }
         }
         .onOpenURL(perform: handleActivityLink)
+        .onChange(of: notificationManager.parkingSessionToOpen, initial: true) { _, sessionId in
+            guard let sessionId else {
+                return
+            }
+
+            activityParkingSessionId = sessionId
+            notificationManager.parkingSessionToOpen = nil
+        }
     }
 
     private func handleActivityLink(_ url: URL) {
@@ -301,6 +310,7 @@ private struct ActiveParkingCard: View {
     @State private var errorMessage = ""
 
     private let repository = ParkingSessionRepository()
+    private let notificationManager = NotificationManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
@@ -347,6 +357,12 @@ private struct ActiveParkingCard: View {
                     .foregroundStyle(AppColors.textSecondary)
             }
 
+            if notificationManager.isParkingReminderUnavailable {
+                Text("The expiry reminder could not be scheduled. Check Settings > Notifications > SpotShield.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
             Button("Refresh parking") {
                 Task {
                     await loadSession()
@@ -363,10 +379,8 @@ private struct ActiveParkingCard: View {
                 cornerRadius: AppSpacing.radiusCard
             )
         )
-        .onAppear {
-            Task {
-                await loadSession()
-            }
+        .task {
+            await loadSession()
         }
     }
 
@@ -380,7 +394,17 @@ private struct ActiveParkingCard: View {
         }
 
         do {
-            session = try await repository.getActiveSession(userId: profile.id)
+            let currentSession = try await repository.getActiveSession(userId: profile.id)
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            session = currentSession
+            _ = await notificationManager.updateParkingExpiryReminder(
+                for: currentSession,
+                userId: profile.id
+            )
         } catch {
             session = nil
             errorMessage = "Could not load parking. Tap Refresh to try again."
