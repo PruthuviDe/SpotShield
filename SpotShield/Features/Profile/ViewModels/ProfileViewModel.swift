@@ -27,6 +27,11 @@ final class ProfileViewModel {
     var notificationStatus = "Checking..."
     var notificationError = ""
     var isRequestingNotifications = false
+    var isBiometricEnabled = false
+    var biometricDeviceName = "Biometric unlock"
+    var isBiometricAvailable = false
+    var isUpdatingBiometric = false
+    var biometricError = ""
 
     init(profile: UserProfile) {
         self.profile = profile
@@ -34,6 +39,7 @@ final class ProfileViewModel {
 
     func load() async {
         await refreshNotificationStatus()
+        refreshBiometricStatus()
 
         switch profile.role {
         case .motorist:
@@ -42,6 +48,34 @@ final class ProfileViewModel {
             await loadAssignedZones()
         case .admin:
             break
+        }
+    }
+
+    func refreshBiometricStatus() {
+        let manager = BiometricManager.shared
+        biometricDeviceName = manager.deviceName()
+        isBiometricAvailable = manager.isAvailable()
+        isBiometricEnabled = manager.isEnabled(for: profile.id)
+    }
+
+    func setBiometricEnabled(_ isEnabled: Bool) async {
+        guard !isUpdatingBiometric else { return }
+
+        biometricError = ""
+        isUpdatingBiometric = true
+        defer { isUpdatingBiometric = false }
+
+        if isEnabled {
+            do {
+                try await BiometricManager.shared.enable(for: profile.id)
+                isBiometricEnabled = true
+            } catch {
+                biometricError = BiometricManager.shared.errorMessage(for: error)
+                isBiometricEnabled = false
+            }
+        } else {
+            BiometricManager.shared.disable(for: profile.id)
+            isBiometricEnabled = false
         }
     }
 

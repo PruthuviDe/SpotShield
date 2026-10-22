@@ -26,6 +26,22 @@ final class AuthService {
         try await auth.sendPasswordReset(withEmail: email)
     }
 
+    func reauthenticate(email: String, password: String) async throws {
+        guard let user = auth.currentUser else {
+            throw AuthServiceError.noSignedInUser
+        }
+
+        guard user.email?.caseInsensitiveCompare(email) == .orderedSame else {
+            throw AuthServiceError.emailDoesNotMatch
+        }
+
+        let credential = EmailAuthProvider.credential(
+            withEmail: email,
+            password: password
+        )
+        try await user.reauthenticate(with: credential)
+    }
+
     func createMotoristAccount(
         name: String,
         email: String,
@@ -79,4 +95,9 @@ final class AuthService {
     func signOut() throws {
         try auth.signOut()
     }
+}
+
+private enum AuthServiceError: Error {
+    case noSignedInUser
+    case emailDoesNotMatch
 }

@@ -36,6 +36,7 @@ struct ProfileView: View {
                 }
 
                 notificationsSection
+                biometricSection
 
                 AppButton(
                     title: "Sign Out",
@@ -229,6 +230,49 @@ struct ProfileView: View {
                     }
                 }
                 .disabled(viewModel.notificationStatus == "Checking...")
+            }
+        }
+    }
+
+    private var biometricSection: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(title: "Secure access")
+
+                Toggle(
+                    "Use \(viewModel.biometricDeviceName)",
+                    isOn: Binding(
+                        get: { viewModel.isBiometricEnabled },
+                        set: { isEnabled in
+                            Task {
+                                await viewModel.setBiometricEnabled(isEnabled)
+                            }
+                        }
+                    )
+                )
+                .tint(AppColors.accent)
+                .disabled(
+                    viewModel.isUpdatingBiometric
+                        || (!viewModel.isBiometricAvailable && !viewModel.isBiometricEnabled)
+                )
+
+                Text("Require biometric authentication when you return to SpotShield.")
+                    .font(AppTypography.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
+
+                if !viewModel.isBiometricAvailable {
+                    AppMessageView(
+                        title: "Set up Face ID or Touch ID on this device to enable secure access.",
+                        appearance: .neutral
+                    )
+                }
+
+                if !viewModel.biometricError.isEmpty {
+                    AppMessageView(
+                        title: viewModel.biometricError,
+                        appearance: .error
+                    )
+                }
             }
         }
     }

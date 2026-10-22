@@ -57,6 +57,7 @@ final class AppState {
         NotificationManager.shared.updateSignedInUser(userId)
 
         guard let userId else {
+            BiometricManager.shared.clearUnlockedUser()
             authState = .signedOut
             return
         }
@@ -189,6 +190,7 @@ final class AppState {
     func signOut() {
         do {
             try authService.signOut()
+            BiometricManager.shared.clearUnlockedUser()
             NotificationManager.shared.updateSignedInUser(nil)
             Task {
                 await LiveActivityManager.shared.end()
@@ -199,6 +201,25 @@ final class AppState {
             authState = .error(
                 "We couldn't sign you out. Please try again."
             )
+        }
+    }
+
+    func reauthenticateCurrentAccount(
+        profile: UserProfile,
+        password: String
+    ) async -> Bool {
+        guard auth.currentUser?.uid == profile.id else { return false }
+
+        do {
+            try await authService.reauthenticate(
+                email: profile.email,
+                password: password
+            )
+            guard auth.currentUser?.uid == profile.id else { return false }
+            BiometricManager.shared.unlockAfterPassword(for: profile.id)
+            return true
+        } catch {
+            return false
         }
     }
 }

@@ -9,11 +9,15 @@ import SwiftUI
 
 struct RootCoordinatorView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSignIn = false
     @State private var showSignUp = false
     @State private var showStaffSignIn = false
     @State private var activityParkingSessionId: String?
     @State private var notificationManager = NotificationManager.shared
+    @State private var biometricManager = BiometricManager.shared
+    @State private var hasEnteredBackground = false
+    @State private var biometricAttemptID = 0
     
     var body: some View {
         Group {
@@ -25,11 +29,7 @@ struct RootCoordinatorView: View {
             case .needsProfile:
                 NavigationStack { DriverSetupView() }
             case .signedIn(let profile):
-                RoleNavigationView(
-                    profile: profile,
-                    parkingSessionId: $activityParkingSessionId
-                )
-                .id(profile.id)
+                signedInView(profile: profile)
             case .wardenRequest(let request):
                 WardenApplicationStatusView(request: request)
             case .error(let message):
@@ -37,6 +37,17 @@ struct RootCoordinatorView: View {
             }
         }
         .onOpenURL(perform: handleActivityLink)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                if case .signedIn(let profile) = appState.authState {
+                    biometricManager.lock(for: profile.id)
+                }
+                hasEnteredBackground = true
+            } else if phase == .active, hasEnteredBackground {
+                hasEnteredBackground = false
+                biometricAttemptID += 1
+            }
+        }
         .onChange(of: notificationManager.parkingSessionToOpen, initial: true) { _, sessionId in
             guard let sessionId else {
                 return
@@ -44,6 +55,23 @@ struct RootCoordinatorView: View {
 
             activityParkingSessionId = sessionId
             notificationManager.parkingSessionToOpen = nil
+        }
+    }
+
+    @ViewBuilder
+    private func signedInView(profile: UserProfile) -> some View {
+        if biometricManager.isEnabled(for: profile.id),
+           biometricManager.unlockedUserID != profile.id {
+            BiometricUnlockView(
+                profile: profile,
+                attemptID: biometricAttemptID
+            )
+        } else {
+            RoleNavigationView(
+                profile: profile,
+                parkingSessionId: $activityParkingSessionId
+            )
+            .id(profile.id)
         }
     }
 

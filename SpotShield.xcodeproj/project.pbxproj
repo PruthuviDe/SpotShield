@@ -395,10 +395,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TJHG58MHF2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Configuration/LocalInfo.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "SpotShield uses Face ID to protect access to your signed-in account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -432,9 +434,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TJHG58MHF2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "SpotShield uses Face ID to protect access to your signed-in account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -468,6 +472,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TJHG58MHF2;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpotShieldLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SpotShieldLiveActivity;
@@ -497,6 +502,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TJHG58MHF2;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpotShieldLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SpotShieldLiveActivity;
