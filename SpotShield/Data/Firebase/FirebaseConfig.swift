@@ -51,6 +51,7 @@ enum FirebaseConfig {
 
             let functions = Functions.functions()
             functions.useEmulator(withHost: host, port: 5001)
+            functions.allowInsecureTokenAttachment = true
 
             return
         }
