@@ -57,10 +57,11 @@ struct ParkingZoneMapView: View {
                 .font(AppTypography.bodySmall)
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(AppSpacing.medium)
                 .background(
                     .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: 14)
+                    in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
                 )
                 .padding()
         }
@@ -91,7 +92,13 @@ struct ParkingZoneMapView: View {
         ) { zone in
             NavigationStack {
                 ParkingZoneDetailView(zone: zone)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { selectedZone = nil }
+                        }
+                    }
             }
+            .tint(AppColors.textPrimary)
         }
         .navigationTitle("Parking Map")
         .navigationBarTitleDisplayMode(.inline)

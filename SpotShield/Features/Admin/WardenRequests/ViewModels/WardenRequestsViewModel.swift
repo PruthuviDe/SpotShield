@@ -14,6 +14,7 @@ final class WardenRequestsViewModel {
     var requests: [WardenRequest] = []
     var isLoading = false
     var errorMessage = ""
+    var successMessage = ""
 
     private let repository = WardenRequestRepository()
 
@@ -21,6 +22,7 @@ final class WardenRequestsViewModel {
         guard !isLoading else { return }
 
         errorMessage = ""
+        successMessage = ""
         isLoading = true
 
         defer {
@@ -41,6 +43,7 @@ final class WardenRequestsViewModel {
         guard !isLoading else { return }
 
         errorMessage = ""
+        successMessage = ""
         isLoading = true
 
         defer {
@@ -56,6 +59,7 @@ final class WardenRequestsViewModel {
             requests.removeAll { savedRequest in
                 savedRequest.id == request.id
             }
+            successMessage = "Warden access approved for \(request.name)."
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -68,6 +72,7 @@ final class WardenRequestsViewModel {
         guard !isLoading else { return }
 
         errorMessage = ""
+        successMessage = ""
         isLoading = true
 
         defer {
@@ -83,6 +88,7 @@ final class WardenRequestsViewModel {
             requests.removeAll { savedRequest in
                 savedRequest.id == request.id
             }
+            successMessage = "Application rejected for \(request.name)."
         } catch {
             errorMessage = error.localizedDescription
         }

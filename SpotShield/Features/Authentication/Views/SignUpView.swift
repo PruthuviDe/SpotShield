@@ -10,21 +10,27 @@ import SwiftUI
 struct SignUpView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel = SignUpViewModel()
+    @FocusState private var focusedField: Field?
+
+    private enum Field { case name, email, password, confirmation, plate }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.large) {
-                header
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                AuthenticationHeaderView(
+                    title: "Create your account",
+                    message: "Your next parking session starts here."
+                )
                 fields
 
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusOverstay)
-                        .multilineTextAlignment(.center)
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 }
 
-                createAccountButton
+                AppButton(title: viewModel.isLoading ? "Creating account…" : "Create Driver Account", isLoading: viewModel.isLoading) {
+                    focusedField = nil
+                    Task { await viewModel.createAccount(appState: appState) }
+                }
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 480)
@@ -36,117 +42,94 @@ struct SignUpView: View {
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Create Account")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var header: some View {
-        VStack(spacing: AppSpacing.medium) {
-            Image("SpotShieldLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .accessibilityHidden(true)
-
-            Text("Create your account")
-                .font(AppTypography.titleLarge)
-
-            Text("Register as a driver to start parking.")
-                .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textSecondary)
-        }
-        .multilineTextAlignment(.center)
-        .padding(.vertical, AppSpacing.large)
+        .navigationBarBackButtonHidden(viewModel.isLoading)
     }
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text("Full name")
-                .font(AppTypography.bodyBold)
-
-            TextField("Enter your name", text: $viewModel.fullName)
-                .textContentType(.name)
-                .textInputAutocapitalization(.words)
-                .frame(minHeight: AppSpacing.minTouchTarget)
-
-            Divider()
-
-            Text("Email")
-                .font(AppTypography.bodyBold)
-
-            TextField("Enter your email", text: $viewModel.email)
-                .keyboardType(.emailAddress)
-                .textContentType(.username)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .frame(minHeight: AppSpacing.minTouchTarget)
-
-            Divider()
-
-            Text("Password")
-                .font(AppTypography.bodyBold)
-
-            SecureField("Create a password", text: $viewModel.password)
-                .textContentType(.newPassword)
-                .frame(minHeight: AppSpacing.minTouchTarget)
-
-            Divider()
-
-            Text("Confirm password")
-                .font(AppTypography.bodyBold)
-
-            SecureField(
-                "Enter your password again",
-                text: $viewModel.confirmPassword
-            )
-            .textContentType(.newPassword)
-            .frame(minHeight: AppSpacing.minTouchTarget)
-
-            Divider()
-
-            Text("License plate (optional)")
-                .font(AppTypography.bodyBold)
-
-            TextField("Example: CAB-1234", text: $viewModel.licensePlate)
-                .keyboardType(.asciiCapable)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .frame(minHeight: AppSpacing.minTouchTarget)
-        }
-        .font(AppTypography.bodyMedium)
-        .textFieldStyle(.plain)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
-        .disabled(viewModel.isLoading)
-    }
-
-    private var createAccountButton: some View {
-        Button {
-            Task {
-                await viewModel.createAccount(appState: appState)
-            }
-        } label: {
-            HStack(spacing: AppSpacing.small) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(AppColors.accent)
-                }
-
-                Text(
-                    viewModel.isLoading
-                        ? "Creating account..."
-                        : "Create Driver Account"
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("Full name").font(AppTypography.bodyBold)
+                TextField(
+                    "Full name",
+                    text: $viewModel.fullName,
+                    prompt: Text("Enter your name").foregroundStyle(AppColors.textSecondary)
                 )
-                .font(AppTypography.bodyBold)
+                    .textContentType(.name)
+                    .textInputAutocapitalization(.words)
+                    .accessibilityLabel("Full name")
+                    .focused($focusedField, equals: .name)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .email }
             }
-            .foregroundStyle(AppColors.accent)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(AppColors.buttonBackground, in: Capsule())
+
+            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("Email").font(AppTypography.bodyBold)
+                TextField(
+                    "Email",
+                    text: $viewModel.email,
+                    prompt: Text("Enter your email").foregroundStyle(AppColors.textSecondary)
+                )
+                    .keyboardType(.emailAddress)
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("Email")
+                    .focused($focusedField, equals: .email)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .password }
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("Password").font(AppTypography.bodyBold)
+                SecureField(
+                    "Password",
+                    text: $viewModel.password,
+                    prompt: Text("Create a password").foregroundStyle(AppColors.textSecondary)
+                )
+                    .textContentType(.newPassword)
+                    .accessibilityLabel("Password")
+                    .focused($focusedField, equals: .password)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .confirmation }
+                Text("Use at least 6 characters.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("Confirm password").font(AppTypography.bodyBold)
+                SecureField(
+                    "Confirm password",
+                    text: $viewModel.confirmPassword,
+                    prompt: Text("Re-enter your password").foregroundStyle(AppColors.textSecondary)
+                )
+                    .textContentType(.newPassword)
+                    .accessibilityLabel("Confirm password")
+                    .focused($focusedField, equals: .confirmation)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .plate }
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("License plate (optional)").font(AppTypography.bodyBold)
+                TextField(
+                    "License plate",
+                    text: $viewModel.licensePlate,
+                    prompt: Text("Example: CAB-1234").foregroundStyle(AppColors.textSecondary)
+                )
+                    .keyboardType(.asciiCapable)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("License plate, optional")
+                    .focused($focusedField, equals: .plate)
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
+                Text("Add your plate now, or later from Park.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
         }
-        .buttonStyle(.plain)
+        .textFieldStyle(AppTextFieldStyle())
         .disabled(viewModel.isLoading)
     }
 }

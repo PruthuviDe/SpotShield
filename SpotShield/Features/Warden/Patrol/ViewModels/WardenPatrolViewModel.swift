@@ -28,6 +28,7 @@ final class WardenPatrolViewModel {
         checkResult = nil
         isConfirmed = false
         successMessage = ""
+        errorMessage = ""
     }
 
     func loadZones() async {
@@ -35,6 +36,7 @@ final class WardenPatrolViewModel {
         pendingSubmission = repository.pendingSubmission()
         isLoading = true
         errorMessage = ""
+        successMessage = ""
         defer { isLoading = false }
         do {
             zones = try await repository.getZones()

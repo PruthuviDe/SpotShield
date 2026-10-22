@@ -9,15 +9,15 @@ import SwiftUI
 
 struct ParkingZoneFormView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     @State private var viewModel: ParkingZoneFormViewModel
-    
+
     init(zone: ParkingZone? = nil) {
         _viewModel = State(
             initialValue: ParkingZoneFormViewModel(zone: zone)
         )
     }
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -48,14 +48,15 @@ struct ParkingZoneFormView: View {
         }
         .interactiveDismissDisabled(viewModel.isSaving)
     }
-    
+
     private var zoneDetails: some View {
         Section("Zone details") {
             LabeledContent("Name") {
                 TextField("Zone name", text: $viewModel.name)
                     .multilineTextAlignment(.trailing)
+                    .textInputAutocapitalization(.words)
             }
-            
+
             LabeledContent("Hourly price (LKR)") {
                 TextField("150", text: $viewModel.hourlyRateLKR)
                     .keyboardType(.numberPad)
@@ -64,7 +65,7 @@ struct ParkingZoneFormView: View {
         }
         .listRowBackground(AppColors.card)
     }
-    
+
     private var locationDetails: some View {
         Section {
             LabeledContent("Latitude") {
@@ -72,28 +73,28 @@ struct ParkingZoneFormView: View {
                     .keyboardType(.numbersAndPunctuation)
                     .multilineTextAlignment(.trailing)
             }
-            
+
             LabeledContent("Longitude") {
                 TextField("79.8612", text: $viewModel.longitude)
                     .keyboardType(.numbersAndPunctuation)
                     .multilineTextAlignment(.trailing)
             }
-            
+
             LabeledContent("Radius (metres)") {
                 TextField("100", text: $viewModel.radiusMeters)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
         } header: {
-            Text("Location")
+            Text("Zone location")
         } footer: {
-            Text("Enter the zone centre and a radius up to 1,000 metres.")
+            Text("Enter the zone centre and a boundary radius up to 1,000 metres.")
         }
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
         .listRowBackground(AppColors.card)
     }
-    
+
     private var parkingHours: some View {
         Section {
             Picker("Opening hour", selection: $viewModel.openingHour) {
@@ -102,14 +103,14 @@ struct ParkingZoneFormView: View {
                         .tag(hour)
                 }
             }
-            
+
             Picker("Closing hour", selection: $viewModel.closingHour) {
                 ForEach(1..<25, id: \.self) { hour in
                     Text("\(hour):00")
                         .tag(hour)
                 }
             }
-            
+
             Stepper(
                 value: $viewModel.maximumStayMinutes,
                 in: 1...1440
@@ -126,13 +127,13 @@ struct ParkingZoneFormView: View {
             Text("Parking hours")
         } footer: {
             Text(
-                "Use Sri Lanka time and 24-hour hours. "
+                "Times use Sri Lanka time in 24-hour format. "
                 + "24:00 means midnight at the end of the day."
             )
         }
         .listRowBackground(AppColors.card)
     }
-    
+
     private var saveSection: some View {
         Section {
             if viewModel.isEditing {
@@ -150,46 +151,33 @@ struct ParkingZoneFormView: View {
                 .font(AppTypography.bodySmall)
                 .foregroundStyle(AppColors.textSecondary)
             }
-            
+
             if !viewModel.errorMessage.isEmpty {
-                Text(viewModel.errorMessage)
-                    .font(AppTypography.bodySmall)
-                    .foregroundStyle(AppColors.statusOverstay)
+                AppMessageView(
+                    title: "Check the zone details",
+                    message: viewModel.errorMessage,
+                    appearance: .error
+                )
             }
-            
-            Button {
+
+            AppButton(
+                title: saveButtonTitle,
+                systemImage: viewModel.isEditing ? "checkmark" : "plus",
+                isLoading: viewModel.isSaving
+            ) {
                 Task {
                     let wasSaved = await viewModel.saveZone()
-                    
+
                     if wasSaved {
                         dismiss()
                     }
                 }
-            } label: {
-                HStack(spacing: AppSpacing.small) {
-                    if viewModel.isSaving {
-                        ProgressView()
-                            .tint(AppColors.accent)
-                    }
-                    
-                    if viewModel.isSaving {
-                        Text("Saving...")
-                    } else if viewModel.isEditing {
-                        Text("Save Changes")
-                    } else {
-                        Text("Save Draft")
-                    }
-                }
-                .font(AppTypography.bodyBold)
-                .foregroundStyle(AppColors.accent)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(
-                    AppColors.buttonBackground,
-                    in: Capsule()
-                )
             }
-            .buttonStyle(.plain)
         }
         .listRowBackground(AppColors.card)
+    }
+
+    private var saveButtonTitle: String {
+        viewModel.isEditing ? "Save Changes" : "Save Draft"
     }
 }

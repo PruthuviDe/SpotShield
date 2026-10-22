@@ -13,65 +13,133 @@ struct WardenRecordsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppSpacing.large) {
+                AppSectionHeader(
+                    title: "My observations",
+                    subtitle: "Follow the review status and Administrator decision for each report."
+                )
+
                 if viewModel.isLoading && viewModel.observations.isEmpty {
-                    ProgressView("Loading observations...")
-                } else if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .foregroundStyle(AppColors.statusOverstay)
-                } else if viewModel.observations.isEmpty {
-                    Text("You have not submitted any observations yet.")
-                        .foregroundStyle(AppColors.textSecondary)
+                    AppLoadingView(title: "Loading observations…")
+                }
+
+                if !viewModel.errorMessage.isEmpty {
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                }
+
+                if viewModel.observations.isEmpty {
+                    if !viewModel.isLoading && viewModel.errorMessage.isEmpty {
+                        AppEmptyStateView(
+                            title: "No observations yet",
+                            message: "Observations you submit during patrol will appear here.",
+                            systemImage: "doc.text.magnifyingglass"
+                        )
+                    }
                 } else {
+                    if viewModel.isLoading {
+                        ProgressView("Refreshing observations…")
+                            .font(AppTypography.bodySmall)
+                    }
+
                     ForEach(viewModel.observations) { observation in
                         observationCard(observation)
                     }
                 }
 
-                Button("Refresh") {
+                AppButton(
+                    title: "Refresh Records",
+                    systemImage: "arrow.clockwise",
+                    appearance: .secondary,
+                    isLoading: viewModel.isLoading
+                ) {
                     Task { await viewModel.loadObservations() }
                 }
-                .buttonStyle(.bordered)
                 .disabled(viewModel.isLoading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 720, alignment: .leading)
             .padding(AppSpacing.large)
+            .frame(maxWidth: .infinity)
         }
-        .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("My Observations")
+        .navigationTitle("Records")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.loadObservations() }
+        .onAppear {
+            Task { await viewModel.loadObservations() }
+        }
+        .refreshable { await viewModel.loadObservations() }
     }
 
     private func observationCard(_ observation: WardenObservation) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text(observation.zoneName)
-                .font(AppTypography.titleSmall)
-            Text(observation.licensePlate)
-                .font(AppTypography.bodyBold)
-            Text(observation.parkingStatus)
-                .foregroundStyle(observation.isViolation ? AppColors.statusOverstay : AppColors.statusValid)
-            Text(observation.reviewStatus.rawValue)
-                .font(AppTypography.bodyBold)
-            Text(observation.observedAt.formatted(date: .abbreviated, time: .shortened))
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppStatusBadge(
+                    title: observation.reviewStatus.rawValue,
+                    appearance: appearance(for: observation.reviewStatus)
+                )
+
+                Text(observation.zoneName)
+                    .font(AppTypography.titleMedium)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Label(observation.licensePlate, systemImage: "car")
+                    .font(AppTypography.bodyBold)
+                    .textSelection(.enabled)
+
+                VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                    Text("Parking check")
+                        .font(AppTypography.captionBold)
+                        .foregroundStyle(AppColors.textSecondary)
+
+                    Text(observation.parkingStatus)
+                        .font(AppTypography.bodySmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Label(
+                    observation.observedAt.formatted(date: .abbreviated, time: .shortened),
+                    systemImage: "clock"
+                )
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.textSecondary)
-            if let notes = observation.notes, !notes.isEmpty {
-                Text(notes)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            if let reason = observation.decisionReason, !reason.isEmpty {
-                Text("Decision: \(reason)")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            if let ticketId = observation.ticketId, !ticketId.isEmpty {
-                Text("Demo ticket issued")
-                    .foregroundStyle(AppColors.statusOverstay)
+
+                if let notes = observation.notes, !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                        Text("Your notes")
+                            .font(AppTypography.captionBold)
+                            .foregroundStyle(AppColors.textSecondary)
+
+                        Text(notes)
+                            .font(AppTypography.bodySmall)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let reason = observation.decisionReason, !reason.isEmpty {
+                    AppMessageView(
+                        title: "Administrator decision",
+                        message: reason,
+                        appearance: observation.reviewStatus == .dismissed ? .success : .neutral
+                    )
+                }
+
+                if let ticketId = observation.ticketId, !ticketId.isEmpty {
+                    Text("Ticket ID: \(ticketId)")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .textSelection(.enabled)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
+    }
+
+    private func appearance(for status: ObservationStatus) -> AppStatusAppearance {
+        switch status {
+        case .awaitingReview:
+            .warning
+        case .ticketIssued:
+            .error
+        case .dismissed:
+            .success
+        }
     }
 }

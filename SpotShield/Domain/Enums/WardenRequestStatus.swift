@@ -15,13 +15,13 @@ enum WardenRequestStatus: String, Codable, CaseIterable {
     var message: String {
         switch self {
         case .waiting:
-            return "Your request is waiting for Admin approval."
+            return "Your application is waiting for approval."
 
         case .approved:
-            return "Your request has been approved."
+            return "Your application has been approved."
 
         case .rejected:
-            return "Your request was not approved."
+            return "Your application was not approved. Contact your administrator for help."
         }
     }
 }

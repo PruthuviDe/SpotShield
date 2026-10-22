@@ -81,8 +81,12 @@ final class AdminTicketReviewViewModel {
         reviewErrorMessage = ""
         defer { reviewingId = "" }
         do {
-            try await repository.reviewObservation(id: observation.id, issueTicket: issueTicket, reason: decisionReason)
-            successMessage = issueTicket ? "Demo ticket issued." : "Observation dismissed."
+            try await repository.reviewObservation(
+                id: observation.id,
+                issueTicket: issueTicket,
+                reason: decisionReason
+            )
+            successMessage = issueTicket ? "Ticket issued." : "Observation dismissed."
             observations.removeAll { $0.id == observation.id }
             selectedObservation = nil
         } catch {

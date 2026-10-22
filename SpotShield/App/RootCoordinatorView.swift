@@ -25,39 +25,13 @@ struct RootCoordinatorView: View {
             case .needsProfile:
                 NavigationStack { DriverSetupView() }
             case .signedIn(let profile):
-                switch profile.role {
-                case .motorist:
-                    motoristHomeView(profile: profile)
-                case .warden:
-                    wardenHomeView(profile: profile)
-                case .admin:
-                    adminHomeView(profile: profile)
-                }
+                RoleNavigationView(
+                    profile: profile,
+                    parkingSessionId: $activityParkingSessionId
+                )
+                .id(profile.id)
             case .wardenRequest(let request):
-                VStack(spacing: AppSpacing.medium) {
-                    Text("Warden Application")
-                        .font(AppTypography.titleMedium)
-                    
-                    Text(request.status.rawValue)
-                        .font(AppTypography.bodyBold)
-                    
-                    Text(request.status.message)
-                        .font(AppTypography.bodyMedium)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button("Check Status") {
-                        appState.loadUserProfile()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    
-                    Button("Sign Out") {
-                        appState.signOut()
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppColors.background.ignoresSafeArea())
+                WardenApplicationStatusView(request: request)
             case .error(let message):
                 errorView(message: message)
             }
@@ -85,17 +59,11 @@ struct RootCoordinatorView: View {
     }
     
     private var loadingView: some View {
-        ZStack {
-            AppColors.background.ignoresSafeArea()
-            VStack(spacing: AppSpacing.small) {
-                ProgressView()
-                Text("Loading SpotShield...")
-                    .font(AppTypography.bodyMedium)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-        }
+        AppLoadingView(title: "Loading your account…")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppColors.background.ignoresSafeArea())
     }
-    
+
     private var signedOutView: some View {
         NavigationStack {
             WelcomeView(
@@ -116,11 +84,7 @@ struct RootCoordinatorView: View {
                 SignUpView()
             }
             .navigationDestination(isPresented: $showStaffSignIn) {
-                SignInView(
-                    title: "Staff sign in",
-                    message: "Sign in with your Warden or Admin account.",
-                    showWardenSignUp: true
-                )
+                StaffAccessView()
             }
         }
         .onDisappear {
@@ -132,286 +96,24 @@ struct RootCoordinatorView: View {
     
     
     private func errorView(message: String) -> some View {
-        ZStack {
-            AppColors.background.ignoresSafeArea()
-            VStack(spacing: AppSpacing.medium) {
-                Text("Account Problem")
-                    .font(AppTypography.titleMedium)
-                
-                Text(message)
-                    .font(AppTypography.bodyMedium)
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
-                
-                Button("Try Again") {
+        ScrollView {
+            VStack(spacing: AppSpacing.large) {
+                AuthenticationHeaderView(
+                    title: "Account access",
+                    message: "We couldn't open your account."
+                )
+                AppMessageView(title: message, appearance: .error)
+                AppButton(title: "Try Again", systemImage: "arrow.clockwise") {
                     appState.loadUserProfile()
                 }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Sign Out") {
+                AppButton(title: "Sign Out", appearance: .secondary) {
                     appState.signOut()
                 }
             }
-            .padding()
+            .padding(AppSpacing.large)
+            .frame(maxWidth: 480)
+            .frame(maxWidth: .infinity)
         }
-    }
-    
-    private func motoristHomeView(profile: UserProfile) -> some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: AppSpacing.medium) {
-                    Text("Welcome, \(profile.name)")
-                        .font(AppTypography.titleMedium)
-
-                    Text("Driver Dashboard")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-
-                    ActiveParkingCard(profile: profile)
-
-                    NavigationLink {
-                        MotoristParkingView()
-                    } label: {
-                        Text("Parking Zones")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    NavigationLink {
-                        WalletView(profile: profile)
-                    } label: {
-                        Text("Wallet")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    
-                    NavigationLink {
-                        ParkingHistoryView(profile: profile)
-                    } label: {
-                        Text("Parking History")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    NavigationLink {
-                        MotoristTicketsView()
-                    } label: {
-                        Text("My Demo Tickets")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    if profile.primaryVehicleId == nil {
-                        NavigationLink {
-                            DriverSetupView(profile: profile)
-                        } label: {
-                            Text("Add Vehicle")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-
-                    NavigationLink {
-                        ProfileView(profile: profile)
-                    } label: {
-                        Text("Profile & Settings")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button("Sign Out") {
-                        appState.signOut()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(AppSpacing.large)
-            }
-            .navigationDestination(item: $activityParkingSessionId) { sessionId in
-                ParkingSetupView(
-                    profile: profile,
-                    expectedSessionId: sessionId
-                )
-            }
-        }
-    }
-    
-    
-    private func wardenHomeView(profile: UserProfile) -> some View {
-        NavigationStack {
-            VStack(spacing: AppSpacing.medium) {
-                Text("Welcome, \(profile.name)")
-                    .font(AppTypography.titleMedium)
-                Text("Parking Warden Dashboard")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-
-                NavigationLink {
-                    WardenPatrolView()
-                } label: {
-                    Text("Start Patrol")
-                }
-                .buttonStyle(.borderedProminent)
-
-                NavigationLink {
-                    WardenRecordsView()
-                } label: {
-                    Text("My Observations")
-                }
-                .buttonStyle(.borderedProminent)
-
-                NavigationLink {
-                    ProfileView(profile: profile)
-                } label: {
-                    Text("Profile & Settings")
-                }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Sign Out") {
-                    appState.signOut()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-    }
-    
-    private func adminHomeView(profile: UserProfile) -> some View {
-        NavigationStack {
-            AdminOverviewView(profile: profile)
-        }
-    }
-}
-
-private struct ActiveParkingCard: View {
-    let profile: UserProfile
-
-    @State private var session: ParkingSession?
-    @State private var isLoading = true
-    @State private var errorMessage = ""
-
-    private let repository = ParkingSessionRepository()
-    private let notificationManager = NotificationManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Current parking")
-                .font(AppTypography.titleSmall)
-
-            if isLoading {
-                ProgressView("Checking your parking...")
-            } else if !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .foregroundStyle(AppColors.statusOverstay)
-            } else if let session {
-                Text(session.zoneName)
-                    .font(AppTypography.bodyBold)
-
-                Text(session.licensePlate)
-                    .foregroundStyle(AppColors.textSecondary)
-
-                TimelineView(.periodic(from: .now, by: 1)) { clock in
-                    Text(remainingTime(
-                        until: session.paidUntil,
-                        now: clock.date
-                    ))
-                    .font(AppTypography.bodyBold)
-                    .foregroundStyle(
-                        session.paidUntil > clock.date
-                            ? AppColors.statusValid
-                            : AppColors.statusOverstay
-                    )
-                }
-
-                Text("Paid until \(formattedDate(session.paidUntil))")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-
-                NavigationLink {
-                    ParkingSetupView(profile: profile)
-                } label: {
-                    Text("Manage Parking")
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Text("You have no active parking.")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            if notificationManager.isParkingReminderUnavailable {
-                Text("The expiry reminder could not be scheduled. Check Settings > Notifications > SpotShield.")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            Button("Refresh parking") {
-                Task {
-                    await loadSession()
-                }
-            }
-            .buttonStyle(.bordered)
-            .disabled(isLoading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
-        .task {
-            await loadSession()
-        }
-    }
-
-    @MainActor
-    private func loadSession() async {
-        isLoading = true
-        errorMessage = ""
-
-        defer {
-            isLoading = false
-        }
-
-        do {
-            let currentSession = try await repository.getActiveSession(userId: profile.id)
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            session = currentSession
-            _ = await notificationManager.updateParkingExpiryReminder(
-                for: currentSession,
-                userId: profile.id
-            )
-        } catch {
-            session = nil
-            errorMessage = "Could not load parking. Tap Refresh to try again."
-        }
-    }
-
-    private func remainingTime(until paidUntil: Date, now: Date) -> String {
-        let secondsLeft = Int(paidUntil.timeIntervalSince(now))
-
-        if secondsLeft <= 0 {
-            return "Paid time has ended"
-        }
-
-        let hours = secondsLeft / 3600
-        let minutes = (secondsLeft % 3600) / 60
-        let seconds = secondsLeft % 60
-
-        if hours > 0 {
-            return "\(hours) hr \(minutes) min remaining"
-        }
-
-        if minutes > 0 {
-            return "\(minutes) min \(seconds) sec remaining"
-        }
-
-        return "\(seconds) sec remaining"
-    }
-
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        formatter.timeZone = TimeZone(identifier: "Asia/Colombo")
-
-        return formatter.string(from: date)
+        .background(AppColors.background.ignoresSafeArea())
     }
 }

@@ -12,121 +12,80 @@ struct WalletView: View {
     @State private var showAutoDeductConfirmation = false
 
     init(profile: UserProfile) {
-        _viewModel = State(
-            initialValue: WalletViewModel(profile: profile)
-        )
+        _viewModel = State(initialValue: WalletViewModel(profile: profile))
+    }
+
+    private var isBusy: Bool {
+        viewModel.isLoading || viewModel.isAddingFunds || viewModel.isUpdatingAutoDeduct
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.large) {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.large) {
                 if viewModel.isLoading, viewModel.wallet == nil {
-                    ProgressView("Loading your wallet...")
+                    AppLoadingView(title: "Loading your wallet…")
                 }
-
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .foregroundStyle(AppColors.statusOverstay)
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 }
-
                 if let wallet = viewModel.wallet {
-                    walletDetails(wallet: wallet)
-                    autoDeductSetting(wallet: wallet)
-
-                    Button {
-                        Task {
-                            await viewModel.addDemoFunds()
-                        }
-                    } label: {
-                        HStack(spacing: AppSpacing.small) {
-                            if viewModel.isAddingFunds {
-                                ProgressView()
-                                    .tint(AppColors.accent)
-                            }
-
-                            Text(
-                                viewModel.isAddingFunds
-                                    ? "Adding demo funds..."
-                                    : "Add LKR 1,000 Demo Funds"
-                            )
-                            .font(AppTypography.bodyBold)
-                        }
-                        .foregroundStyle(AppColors.accent)
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                        .background(AppColors.buttonBackground, in: Capsule())
+                    walletDetails(wallet)
+                    AppButton(title: viewModel.isAddingFunds ? "Adding Funds…" : "Top Up LKR 1,000", systemImage: "plus", isLoading: viewModel.isAddingFunds) {
+                        Task { await viewModel.addDemoFunds() }
                     }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.isAddingFunds || viewModel.isLoading || viewModel.isUpdatingAutoDeduct)
-
+                    .disabled(isBusy)
                     if !viewModel.successMessage.isEmpty {
-                        Text(viewModel.successMessage)
-                            .foregroundStyle(AppColors.statusValid)
+                        AppMessageView(title: viewModel.successMessage, appearance: .success)
                     }
-
+                    autoDeductSetting(wallet)
                     transactionHistory
                 }
-
-                Button("Refresh") {
-                    Task {
-                        await viewModel.loadWallet()
-                    }
+                AppButton(title: "Refresh Wallet", systemImage: "arrow.clockwise", appearance: .secondary) {
+                    Task { await viewModel.loadWallet() }
                 }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.isLoading || viewModel.isAddingFunds || viewModel.isUpdatingAutoDeduct)
+                .disabled(isBusy)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
         .tint(AppColors.textPrimary)
         .navigationTitle("Wallet")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.loadWallet()
-        }
-        .confirmationDialog(
-            "Enable auto-deduction for new demo tickets?",
-            isPresented: $showAutoDeductConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Enable auto-deduction") {
+        .task { await viewModel.loadWallet() }
+        .refreshable { await viewModel.loadWallet() }
+        .confirmationDialog("Enable automatic ticket payments?", isPresented: $showAutoDeductConfirmation, titleVisibility: .visible) {
+            Button("Enable Auto-deduction") {
                 Task { await viewModel.setTicketAutoDeduct(enabled: true) }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("New LKR 1,000 demo tickets will be paid from your wallet when possible. Existing due tickets will not be charged. Tickets stay due if your balance is too low.")
+            Text("New LKR 1,000 tickets will be paid from your wallet when funds are available. Existing due tickets stay unchanged.")
         }
     }
 
-    private func walletDetails(wallet: Wallet) -> some View {
+    private func walletDetails(_ wallet: Wallet) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Demo balance")
-                .font(AppTypography.titleSmall)
-
-            Text("LKR \(wallet.balanceLKR)")
-                .font(AppTypography.priceDisplay)
-
-            Text("These are demo funds. No real money is involved.")
+            Label("Available balance", systemImage: "wallet.bifold")
+                .font(AppTypography.bodyBold)
+            Text("LKR \(wallet.balanceLKR.formatted())")
+                .font(AppTypography.timerDisplay)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("For parking and ticket payments")
                 .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textSecondary)
         }
+        .foregroundStyle(AppColors.textLight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
+        .padding(AppSpacing.large)
+        .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
     }
 
-    private func autoDeductSetting(wallet: Wallet) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Toggle(
-                "Auto-deduct new demo tickets",
-                isOn: Binding(
+    private func autoDeductSetting(_ wallet: Wallet) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Toggle("Automatic ticket payments", isOn: Binding(
                     get: { wallet.autoDeductEnabled },
                     set: { enabled in
                         if enabled {
@@ -135,81 +94,52 @@ struct WalletView: View {
                             Task { await viewModel.setTicketAutoDeduct(enabled: false) }
                         }
                     }
-                )
-            )
-            .disabled(viewModel.isLoading || viewModel.isAddingFunds || viewModel.isUpdatingAutoDeduct)
-
-            Text("This only applies to tickets issued after you enable it. You can pay older due tickets manually.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
+                ))
+                .font(AppTypography.bodyBold)
+                .tint(AppColors.statusValid)
+                .disabled(isBusy)
+                Text("Applies to new tickets when your balance is sufficient. Pay existing due tickets from History.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+                if viewModel.isUpdatingAutoDeduct {
+                    AppLoadingView(title: "Saving your preference…")
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
     }
 
     private var transactionHistory: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Recent transactions")
-                .font(AppTypography.titleSmall)
-
+            AppSectionHeader(title: "Recent transactions")
             if viewModel.isLoading {
-                ProgressView("Loading transactions...")
+                AppLoadingView(title: "Loading transactions…")
             } else if !viewModel.historyErrorMessage.isEmpty {
-                Text(viewModel.historyErrorMessage)
-                    .foregroundStyle(AppColors.statusOverstay)
+                AppMessageView(title: viewModel.historyErrorMessage, appearance: .error)
             } else if viewModel.transactions.isEmpty {
-                Text("No transactions yet.")
-                    .foregroundStyle(AppColors.textSecondary)
+                AppEmptyStateView(title: "No transactions yet", message: "Your top-ups and payments will appear here.", systemImage: "creditcard")
             } else {
                 ForEach(viewModel.transactions) { transaction in
-                    transactionDetails(transaction: transaction)
+                    AppCard {
+                        VStack(alignment: .leading, spacing: AppSpacing.small) {
+                            Text(transaction.type.rawValue).font(AppTypography.bodyBold)
+                            Text(transaction.createdAt, format: .dateTime.day().month().year().hour().minute())
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.textSecondary)
+                            Text("\(transaction.type == .topUp ? "+" : "−") LKR \(transaction.amountLKR.formatted())")
+                                .font(AppTypography.priceDisplay)
+                                .foregroundStyle(transaction.type == .topUp ? AppColors.statusValid : AppColors.textPrimary)
+                            Text("Balance after: LKR \(transaction.balanceAfterLKR.formatted())")
+                                .font(AppTypography.caption)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                    }
                 }
-
                 if viewModel.transactions.count == 50 {
-                    Text("Showing the latest 50 transactions.")
+                    Text("Latest 50 transactions")
                         .font(AppTypography.caption)
                         .foregroundStyle(AppColors.textSecondary)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func transactionDetails(
-        transaction: WalletTransaction
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(transaction.type.rawValue)
-                .font(AppTypography.bodyBold)
-
-            Text(
-                transaction.createdAt,
-                format: .dateTime.day().month().year().hour().minute()
-            )
-            .font(AppTypography.caption)
-            .foregroundStyle(AppColors.textSecondary)
-
-            if transaction.type == .topUp {
-                Text("+ LKR \(transaction.amountLKR)")
-                    .font(AppTypography.priceDisplay)
-                    .foregroundStyle(AppColors.statusValid)
-            } else {
-                Text("- LKR \(transaction.amountLKR)")
-                    .font(AppTypography.priceDisplay)
-            }
-
-            Text("Balance after: LKR \(transaction.balanceAfterLKR)")
-                .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 }

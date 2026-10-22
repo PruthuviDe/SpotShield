@@ -13,8 +13,11 @@ struct ProfileView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: ProfileViewModel
+    @State private var isShowingSignOutConfirmation = false
+    private let onOpenWallet: (() -> Void)?
 
-    init(profile: UserProfile) {
+    init(profile: UserProfile, onOpenWallet: (() -> Void)? = nil) {
+        self.onOpenWallet = onOpenWallet
         _viewModel = State(
             initialValue: ProfileViewModel(profile: profile)
         )
@@ -34,13 +37,16 @@ struct ProfileView: View {
 
                 notificationsSection
 
-                Button("Sign Out", role: .destructive) {
-                    appState.signOut()
+                AppButton(
+                    title: "Sign Out",
+                    systemImage: "rectangle.portrait.and.arrow.right",
+                    appearance: .destructive
+                ) {
+                    isShowingSignOutConfirmation = true
                 }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 560, alignment: .leading)
+            .frame(maxWidth: .infinity)
             .padding(AppSpacing.large)
         }
         .font(AppTypography.bodyMedium)
@@ -58,155 +64,201 @@ struct ProfileView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "Sign out of SpotShield?",
+            isPresented: $isShowingSignOutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                appState.signOut()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You will need to sign in again to access your account.")
+        }
     }
 
     private var accountCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(viewModel.profile.name)
-                .font(AppTypography.titleSmall)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                AppSectionHeader(title: "Account")
+                Text(viewModel.profile.name)
+                    .font(AppTypography.titleMedium)
 
-            Text(viewModel.profile.email)
-                .foregroundStyle(AppColors.textSecondary)
+                Text(viewModel.profile.email)
+                    .font(AppTypography.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
 
-            Text(viewModel.profile.role.title)
-                .font(AppTypography.bodyBold)
+                AppStatusBadge(title: viewModel.profile.role.title)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
-        )
     }
 
     private var vehicleSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Vehicle")
-                .font(AppTypography.titleSmall)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(title: "Vehicle")
 
-            if viewModel.isLoadingVehicle {
-                ProgressView("Loading vehicle...")
-            } else if let vehicle = viewModel.vehicle {
-                Text(vehicle.licensePlate)
-                    .font(AppTypography.bodyBold)
+                if viewModel.isLoadingVehicle {
+                    AppLoadingView(title: "Loading vehicle details…")
+                } else if let vehicle = viewModel.vehicle {
+                    Label(vehicle.licensePlate, systemImage: "car")
+                        .font(AppTypography.bodyBold)
 
-                let vehicleDescription = "\(vehicle.make) \(vehicle.model)"
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let vehicleDescription = "\(vehicle.make) \(vehicle.model)"
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
 
-                if !vehicleDescription.isEmpty {
-                    Text(vehicleDescription)
-                        .foregroundStyle(AppColors.textSecondary)
+                    if !vehicleDescription.isEmpty {
+                        Text(vehicleDescription)
+                            .font(AppTypography.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                } else {
+                    AppMessageView(
+                        title: viewModel.vehicleMessage,
+                        appearance: .neutral
+                    )
                 }
-            } else {
-                Text(viewModel.vehicleMessage)
-                    .foregroundStyle(AppColors.textSecondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
-        )
     }
 
     private var walletLink: some View {
-        NavigationLink {
-            WalletView(profile: viewModel.profile)
-        } label: {
-            Text("Wallet settings")
-                .frame(maxWidth: .infinity)
+        Group {
+            if let onOpenWallet {
+                Button(action: onOpenWallet) {
+                    Label("Wallet settings", systemImage: "wallet.bifold")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AppButtonStyle(appearance: .secondary))
+            } else {
+                NavigationLink {
+                    WalletView(profile: viewModel.profile)
+                } label: {
+                    Label("Wallet settings", systemImage: "wallet.bifold")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AppButtonStyle(appearance: .secondary))
+            }
         }
-        .buttonStyle(.bordered)
     }
 
     private var assignmentSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Assigned patrol zones")
-                .font(AppTypography.titleSmall)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(title: "Assigned patrol zones")
 
-            if viewModel.isLoadingZones {
-                ProgressView("Loading assigned zones...")
-            } else if !viewModel.assignmentError.isEmpty {
-                Text(viewModel.assignmentError)
-                    .foregroundStyle(AppColors.statusOverstay)
-            } else if viewModel.assignedZones.isEmpty {
-                Text("No active parking zones are assigned to you.")
-                    .foregroundStyle(AppColors.textSecondary)
-            } else {
-                ForEach(viewModel.assignedZones) { zone in
-                    Text(zone.name)
-                        .font(AppTypography.bodyBold)
+                if viewModel.isLoadingZones {
+                    AppLoadingView(title: "Loading assigned zones…")
+                } else if !viewModel.assignmentError.isEmpty {
+                    AppMessageView(
+                        title: viewModel.assignmentError,
+                        appearance: .error
+                    )
+                } else if viewModel.assignedZones.isEmpty {
+                    AppMessageView(
+                        title: "No patrol zones assigned",
+                        message: "Your active patrol assignments will appear here.",
+                        appearance: .neutral
+                    )
+                } else {
+                    ForEach(viewModel.assignedZones) { zone in
+                        Label(zone.name, systemImage: "mappin.and.ellipse")
+                            .font(AppTypography.bodyBold)
+                    }
                 }
 
-                Text("Only active zones currently available for patrol are shown.")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            Button("Refresh assignments") {
-                Task {
-                    await viewModel.loadAssignedZones()
+                AppButton(
+                    title: "Refresh assignments",
+                    systemImage: "arrow.clockwise",
+                    appearance: .secondary,
+                    isLoading: viewModel.isLoadingZones
+                ) {
+                    Task {
+                        await viewModel.loadAssignedZones()
+                    }
                 }
             }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.isLoadingZones)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
-        )
     }
 
     private var notificationsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text(viewModel.profile.role == .motorist ? "Parking reminders" : "Notifications")
-                .font(AppTypography.titleSmall)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(
+                    title: viewModel.profile.role == .motorist
+                        ? "Parking reminders"
+                        : "Notifications"
+                )
 
-            Text("Notification access: \(viewModel.notificationStatus)")
-                .foregroundStyle(AppColors.textSecondary)
-
-            if !viewModel.notificationError.isEmpty {
-                Text(viewModel.notificationError)
-                    .foregroundStyle(AppColors.statusOverstay)
-            }
-
-            Button {
-                if viewModel.notificationStatus == "Not requested" {
-                    Task {
-                        await viewModel.requestNotifications()
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        Text("Notification access")
+                            .foregroundStyle(AppColors.textSecondary)
+                        Spacer(minLength: AppSpacing.small)
+                        notificationBadge
                     }
-                } else if let settingsURL = URL(
-                    string: UIApplication.openSettingsURLString
-                ) {
-                    openURL(settingsURL)
+                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                        Text("Notification access")
+                            .foregroundStyle(AppColors.textSecondary)
+                        notificationBadge
+                    }
                 }
-            } label: {
-                if viewModel.isRequestingNotifications {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text(
-                        viewModel.notificationStatus == "Not requested"
-                            ? "Enable Notifications"
-                            : "Open iPhone Settings"
+
+                if !viewModel.notificationError.isEmpty {
+                    AppMessageView(
+                        title: viewModel.notificationError,
+                        appearance: .error
                     )
-                    .frame(maxWidth: .infinity)
                 }
+
+                AppButton(
+                    title: notificationButtonTitle,
+                    systemImage: notificationButtonImage,
+                    appearance: .secondary,
+                    isLoading: viewModel.isRequestingNotifications
+                ) {
+                    if viewModel.notificationStatus == "Not requested" {
+                        Task {
+                            await viewModel.requestNotifications()
+                        }
+                    } else if let settingsURL = URL(
+                        string: UIApplication.openSettingsURLString
+                    ) {
+                        openURL(settingsURL)
+                    }
+                }
+                .disabled(viewModel.notificationStatus == "Checking...")
             }
-            .buttonStyle(.bordered)
-            .disabled(
-                viewModel.notificationStatus == "Checking..."
-                    || viewModel.isRequestingNotifications
-            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
+    }
+
+    private var notificationBadge: some View {
+        AppStatusBadge(
+            title: viewModel.notificationStatus,
+            appearance: notificationAppearance
         )
     }
+
+    private var notificationAppearance: AppStatusAppearance {
+        switch viewModel.notificationStatus {
+        case "Allowed", "Allowed quietly": .success
+        case "Temporary access": .warning
+        case "Off", "Unavailable": .error
+        default: .neutral
+        }
+    }
+
+    private var notificationButtonTitle: String {
+        viewModel.notificationStatus == "Not requested"
+            ? "Enable Notifications"
+            : "Open iPhone Settings"
+    }
+
+    private var notificationButtonImage: String {
+        viewModel.notificationStatus == "Not requested"
+            ? "bell.badge"
+            : "gearshape"
+    }
+
 }

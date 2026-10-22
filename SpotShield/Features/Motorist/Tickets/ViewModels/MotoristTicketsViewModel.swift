@@ -42,7 +42,7 @@ final class MotoristTicketsViewModel {
             try await repository.payTicket(ticketId: ticket.id)
             guard let index = tickets.firstIndex(where: { $0.id == ticket.id }) else { return }
             tickets[index].paymentStatus = .paid
-            tickets[index].paymentMessage = "Paid from your demo wallet."
+            tickets[index].paymentMessage = "Paid from your wallet."
         } catch {
             paymentErrors[ticket.id] = "Payment was not confirmed. Check your wallet balance, then refresh or safely retry."
         }

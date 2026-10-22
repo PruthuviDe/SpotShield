@@ -12,111 +12,66 @@ struct MotoristParkingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.medium) {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.large) {
+                AppSectionHeader(title: "Choose your zone", subtitle: "Check the rate and opening hours before you park.")
                 if viewModel.isLoading {
-                    ProgressView("Loading parking zones...")
+                    AppLoadingView(title: "Loading parking zones…")
+                } else if !viewModel.errorMessage.isEmpty {
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 }
-
-                if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusOverstay)
-                }
-
                 if !viewModel.zones.isEmpty {
                     NavigationLink {
                         ParkingZoneMapView(zones: viewModel.zones)
                     } label: {
                         Label("View Parking Map", systemImage: "map")
-                            .font(AppTypography.bodyBold)
-                            .frame(maxWidth: .infinity)
-                            .padding(AppSpacing.medium)
-                            .foregroundStyle(AppColors.textOnAccent)
-                            .background(
-                                AppColors.accent,
-                                in: RoundedRectangle(
-                                    cornerRadius: AppSpacing.radiusButton
-                                )
-                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(AppButtonStyle())
+                } else if !viewModel.isLoading, viewModel.errorMessage.isEmpty {
+                    AppEmptyStateView(title: "No zones available", message: "Check again later for available parking zones.", systemImage: "map")
                 }
-
-                if viewModel.zones.isEmpty,
-                   !viewModel.isLoading,
-                   viewModel.errorMessage.isEmpty {
-                    Text("No parking zones to show yet.")
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-
                 ForEach(viewModel.zones) { zone in
                     NavigationLink {
                         ParkingZoneDetailView(zone: zone)
                     } label: {
-                        zoneCard(zone: zone)
+                        zoneCard(zone)
                     }
                     .buttonStyle(.plain)
                 }
-
-                Text("Operating hours are shown in Sri Lanka time.")
+                Text("All parking hours are shown in Sri Lanka time.")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
-
-                Button("Refresh") {
-                    Task {
-                        await viewModel.loadZones()
-                    }
+                AppButton(title: "Refresh Zones", systemImage: "arrow.clockwise", appearance: .secondary) {
+                    Task { await viewModel.loadZones() }
                 }
-                .buttonStyle(.bordered)
                 .disabled(viewModel.isLoading)
             }
             .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .tint(AppColors.textPrimary)
         .navigationTitle("Parking Zones")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.loadZones()
-        }
+        .task { await viewModel.loadZones() }
+        .refreshable { await viewModel.loadZones() }
     }
 
-    private func zoneCard(zone: ParkingZone) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(zone.name)
-                .font(AppTypography.titleSmall)
-
-            Text("LKR \(zone.hourlyRateLKR) per hour")
-                .font(AppTypography.priceDisplay)
-
-            Text(
-                "Hours: \(zone.openingHour):00"
-                + "–\(zone.closingHour):00"
-            )
-            .foregroundStyle(AppColors.textSecondary)
-
-            Text("Maximum stay: \(zone.maximumStayMinutes) minutes")
-                .foregroundStyle(AppColors.textSecondary)
-
-            if zone.isActive {
-                Text("Active zone — check parking hours")
-                    .font(AppTypography.bodySmall)
-            } else {
-                Text("Currently unavailable")
-                    .font(AppTypography.bodySmall)
-                    .foregroundStyle(AppColors.statusNeutral)
+    private func zoneCard(_ zone: ParkingZone) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppStatusBadge(title: zone.isActive ? "Check opening hours" : "Unavailable", appearance: .neutral)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(zone.name).font(AppTypography.titleMedium)
+                    Spacer(minLength: AppSpacing.small)
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                }
+                Text("LKR \(zone.hourlyRateLKR.formatted()) / hour")
+                    .font(AppTypography.priceDisplay)
+                Label("\(String(format: "%02d:00", zone.openingHour))–\(String(format: "%02d:00", zone.closingHour))", systemImage: "clock")
+                Label("Up to \(zone.maximumStayMinutes) minutes", systemImage: "hourglass")
             }
+            .foregroundStyle(AppColors.textPrimary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 }

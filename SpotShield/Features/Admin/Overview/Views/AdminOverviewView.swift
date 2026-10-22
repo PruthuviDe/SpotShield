@@ -8,35 +8,33 @@
 import SwiftUI
 
 struct AdminOverviewView: View {
-    @Environment(AppState.self) private var appState
     @State private var viewModel: AdminOverviewViewModel
+    let onOpenZones: () -> Void
+    let onOpenRecords: () -> Void
 
-    init(profile: UserProfile) {
+    init(
+        profile: UserProfile,
+        onOpenZones: @escaping () -> Void,
+        onOpenRecords: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: AdminOverviewViewModel(profile: profile))
+        self.onOpenZones = onOpenZones
+        self.onOpenRecords = onOpenRecords
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.large) {
-                VStack(alignment: .leading, spacing: AppSpacing.small) {
-                    Text("Welcome, \(viewModel.profile.name)")
-                        .font(AppTypography.titleMedium)
-
-                    Text("Manage parking zones, staffing and observation reviews.")
-                        .foregroundStyle(AppColors.textSecondary)
-                }
+            VStack(alignment: .leading, spacing: AppSpacing.xLarge) {
+                AppSectionHeader(
+                    title: "Welcome, \(viewModel.profile.name)",
+                    subtitle: "Manage zones, Warden coverage and parking reviews."
+                )
 
                 overview
                 managementLinks
-
-                Button("Sign Out", role: .destructive) {
-                    appState.signOut()
-                }
-                .buttonStyle(.bordered)
-                .tint(AppColors.statusOverstay)
             }
             .padding(AppSpacing.large)
-            .frame(maxWidth: 960, alignment: .leading)
+            .frame(maxWidth: 920, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .font(AppTypography.bodyMedium)
@@ -54,14 +52,6 @@ struct AdminOverviewView: View {
                 }
                 .disabled(viewModel.isLoading)
             }
-
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    ProfileView(profile: viewModel.profile)
-                } label: {
-                    Label("Profile & Settings", systemImage: "person.crop.circle")
-                }
-            }
         }
         .task {
             await viewModel.loadOverview()
@@ -73,22 +63,29 @@ struct AdminOverviewView: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("At a glance")
-                .font(AppTypography.titleSmall)
+            AppSectionHeader(title: "At a glance")
 
             if viewModel.isLoading {
-                ProgressView("Loading overview...")
+                AppLoadingView(title: "Loading overview…")
             } else if !viewModel.errorMessage.isEmpty {
-                Text(viewModel.errorMessage)
-                    .foregroundStyle(AppColors.statusOverstay)
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    AppMessageView(
+                        title: "Overview unavailable",
+                        message: viewModel.errorMessage,
+                        appearance: .error
+                    )
 
-                Button("Try Again") {
-                    Task { await viewModel.loadOverview() }
+                    AppButton(
+                        title: "Try Again",
+                        systemImage: "arrow.clockwise",
+                        appearance: .secondary
+                    ) {
+                        Task { await viewModel.loadOverview() }
+                    }
                 }
-                .buttonStyle(.bordered)
             } else if let lastUpdated = viewModel.lastUpdated {
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 220), spacing: AppSpacing.medium)],
+                    columns: [GridItem(.adaptive(minimum: 230), spacing: AppSpacing.medium)],
                     alignment: .leading,
                     spacing: AppSpacing.medium
                 ) {
@@ -112,13 +109,19 @@ struct AdminOverviewView: View {
                 }
 
                 if viewModel.activeZoneCount == 0 {
-                    Text("No parking zones are active. Open Parking Zones to manage publication and Warden coverage.")
-                        .foregroundStyle(AppColors.textSecondary)
+                    AppMessageView(
+                        title: "No active parking zones",
+                        message: "Open Parking Zones to review publication and Warden coverage."
+                    )
                 }
 
-                if viewModel.pendingApplicationCount == 0 && viewModel.pendingObservationCount == 0 {
-                    Text("No applications or observations are awaiting review.")
-                        .foregroundStyle(AppColors.statusValid)
+                if viewModel.pendingApplicationCount == 0
+                    && viewModel.pendingObservationCount == 0 {
+                    AppMessageView(
+                        title: "Reviews are up to date",
+                        message: "There are no applications or observations waiting for review.",
+                        appearance: .success
+                    )
                 }
 
                 Text("Updated \(lastUpdated.formatted(date: .abbreviated, time: .shortened))")
@@ -128,82 +131,107 @@ struct AdminOverviewView: View {
         }
     }
 
-    private func statisticCard(title: String, count: Int, systemImage: String) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Image(systemName: systemImage)
-                .font(AppTypography.titleSmall)
-                .foregroundStyle(AppColors.statusValid)
-                .accessibilityHidden(true)
+    private func statisticCard(
+        title: String,
+        count: Int,
+        systemImage: String
+    ) -> some View {
+        AppCard {
+            HStack(alignment: .top, spacing: AppSpacing.medium) {
+                Image(systemName: systemImage)
+                    .font(AppTypography.titleSmall)
+                    .foregroundStyle(AppColors.statusValid)
+                    .accessibilityHidden(true)
 
-            Text(count, format: .number)
-                .font(AppTypography.timerDisplay)
+                VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                    Text(count, format: .number)
+                        .font(AppTypography.titleLarge)
+                        .monospacedDigit()
 
-            Text(title)
-                .font(AppTypography.bodyBold)
+                    Text(title)
+                        .font(AppTypography.bodyBold)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: AppSpacing.minTouchTarget, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
         .accessibilityElement(children: .combine)
     }
 
     private var managementLinks: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Manage")
-                .font(AppTypography.titleSmall)
+            AppSectionHeader(title: "Administration")
 
-            NavigationLink {
-                ParkingZonesView()
-            } label: {
-                managementLabel("Parking Zones", detail: "Rates, hours and zone availability", systemImage: "map")
+            Button(action: onOpenZones) {
+                managementLabel(
+                    "Parking Zones",
+                    detail: "Rates, hours and zone availability",
+                    systemImage: "map"
+                )
             }
 
             NavigationLink {
                 WardenAssignmentsView(adminUserId: viewModel.profile.id)
             } label: {
-                managementLabel("Warden Assignments", detail: "Assign Wardens and manage coverage", systemImage: "person.2")
+                managementLabel(
+                    "Warden Assignments",
+                    detail: "Assign Wardens and manage zone coverage",
+                    systemImage: "person.2"
+                )
             }
 
             NavigationLink {
                 WardenRequestsView(adminUserId: viewModel.profile.id)
             } label: {
-                managementLabel("Warden Applications", detail: "Approve or reject waiting applications", systemImage: "person.badge.plus")
+                managementLabel(
+                    "Warden Applications",
+                    detail: "Review applications awaiting a decision",
+                    systemImage: "person.badge.plus"
+                )
             }
 
-            NavigationLink {
-                AdminTicketReviewView()
-            } label: {
-                managementLabel("Review Observations", detail: "Review cases and saved ticket decisions", systemImage: "doc.text")
+            Button(action: onOpenRecords) {
+                managementLabel(
+                    "Review Observations",
+                    detail: "Review Warden reports and ticket decisions",
+                    systemImage: "doc.text.magnifyingglass"
+                )
             }
         }
         .buttonStyle(.plain)
     }
 
-    private func managementLabel(_ title: String, detail: String, systemImage: String) -> some View {
-        HStack(spacing: AppSpacing.medium) {
-            Image(systemName: systemImage)
-                .font(AppTypography.titleSmall)
-                .foregroundStyle(AppColors.statusValid)
-                .accessibilityHidden(true)
+    private func managementLabel(
+        _ title: String,
+        detail: String,
+        systemImage: String
+    ) -> some View {
+        AppCard {
+            HStack(spacing: AppSpacing.medium) {
+                Image(systemName: systemImage)
+                    .font(AppTypography.titleSmall)
+                    .foregroundStyle(AppColors.statusValid)
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
-                Text(title)
-                    .font(AppTypography.bodyBold)
+                VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                    Text(title)
+                        .font(AppTypography.bodyBold)
 
-                Text(detail)
-                    .font(AppTypography.bodySmall)
+                    Text(detail)
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(AppTypography.captionBold)
                     .foregroundStyle(AppColors.textSecondary)
+                    .accessibilityHidden(true)
             }
-
-            Spacer(minLength: AppSpacing.small)
-
-            Image(systemName: "chevron.right")
-                .foregroundStyle(AppColors.textSecondary)
-                .accessibilityHidden(true)
+            .frame(minHeight: AppSpacing.minTouchTarget, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
         }
-        .frame(maxWidth: .infinity, minHeight: AppSpacing.minTouchTarget, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
-        .contentShape(RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
     }
 }

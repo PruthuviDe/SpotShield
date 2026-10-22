@@ -7,6 +7,7 @@
 
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct SpotShieldLiveActivityLiveActivity: Widget {
@@ -15,27 +16,27 @@ struct SpotShieldLiveActivityLiveActivity: Widget {
             VStack(alignment: .leading, spacing: 12) {
                 Text(context.attributes.zoneName)
                     .font(.headline)
-                    .foregroundStyle(Color.black)
+                    .foregroundStyle(.primary)
 
                 HStack {
                     Text("Parking active")
-                        .foregroundStyle(Color.gray)
+                        .foregroundStyle(.secondary)
 
                     Spacer()
 
                     countdown(until: context.state.paidUntil)
                         .font(.title2.bold())
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(.primary)
                 }
 
                 Text(
                     "Paid until \(context.state.paidUntil.formatted(date: .omitted, time: .shortened))"
                 )
-                .foregroundStyle(Color.gray)
+                .foregroundStyle(.secondary)
             }
             .padding()
-            .activityBackgroundTint(.white)
-            .activitySystemActionForegroundColor(.black)
+            .activityBackgroundTint(Color(uiColor: .secondarySystemBackground))
+            .activitySystemActionForegroundColor(Color(uiColor: .label))
             .widgetURL(
                 URL(string: "spotshield://parking/\(context.attributes.sessionId)")
             )

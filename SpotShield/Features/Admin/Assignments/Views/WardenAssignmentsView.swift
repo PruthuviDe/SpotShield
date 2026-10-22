@@ -15,30 +15,40 @@ struct WardenAssignmentsView: View {
     @State private var showEndConfirmation = false
 
     var body: some View {
-        Form {
-            messagesSection
-            newAssignmentSection
-            assignmentsSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(
+                    title: "Warden coverage",
+                    subtitle: "Assign Wardens to zones and manage current coverage."
+                )
 
-            Section {
-                Button("Refresh") {
-                    Task {
-                        await viewModel.loadData()
-                    }
+                feedback
+                newAssignmentSection
+                assignmentsSection
+
+                AppButton(
+                    title: "Refresh assignments",
+                    systemImage: "arrow.clockwise",
+                    appearance: .secondary,
+                    isLoading: viewModel.isLoading
+                ) {
+                    Task { await viewModel.loadData() }
                 }
             }
-            .listRowBackground(AppColors.card)
+            .padding(AppSpacing.large)
+            .frame(maxWidth: 680, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
+        .background(AppColors.background.ignoresSafeArea())
         .tint(AppColors.textPrimary)
-        .scrollContentBackground(.hidden)
-        .background(AppColors.background)
-        .disabled(viewModel.isLoading)
         .navigationTitle("Warden Assignments")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(viewModel.isLoading)
         .task {
+            await viewModel.loadData()
+        }
+        .refreshable {
             await viewModel.loadData()
         }
         .confirmationDialog(
@@ -49,181 +59,185 @@ struct WardenAssignmentsView: View {
         ) { assignment in
             Button("End Assignment", role: .destructive) {
                 Task {
-                    await viewModel.endAssignment(
-                        assignment: assignment
-                    )
+                    await viewModel.endAssignment(assignment: assignment)
                 }
             }
 
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { }
         } message: { _ in
-            Text(
-                "This will end the Warden's assignment for this zone. "
-                + "The record will stay in history."
-            )
+            Text("This will end the Warden's assignment for this zone. The history will be kept.")
         }
     }
 
-    private var messagesSection: some View {
-        Section {
-            if viewModel.isLoading {
-                ProgressView("Please wait...")
-            }
-
-            if !viewModel.errorMessage.isEmpty {
-                Text(viewModel.errorMessage)
-                    .foregroundStyle(AppColors.statusOverstay)
-            }
-
-            if !viewModel.successMessage.isEmpty {
-                Text(viewModel.successMessage)
-                    .foregroundStyle(AppColors.statusValid)
-            }
+    @ViewBuilder
+    private var feedback: some View {
+        if viewModel.isLoading
+            && viewModel.zones.isEmpty
+            && viewModel.wardens.isEmpty
+            && viewModel.assignments.isEmpty {
+            AppLoadingView(title: "Loading assignments…")
         }
-        .listRowBackground(AppColors.card)
+
+        if !viewModel.errorMessage.isEmpty {
+            AppMessageView(
+                title: "Could not update Warden coverage",
+                message: viewModel.errorMessage,
+                appearance: .error
+            )
+        }
+
+        if !viewModel.successMessage.isEmpty {
+            AppMessageView(
+                title: viewModel.successMessage,
+                appearance: .success
+            )
+        }
     }
 
     private var newAssignmentSection: some View {
-        Section {
-            if !viewModel.isLoading,
-               viewModel.errorMessage.isEmpty {
-                if viewModel.zones.isEmpty {
-                    Text("Create a parking zone first.")
-                        .foregroundStyle(AppColors.textSecondary)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(
+                    title: "New assignment",
+                    subtitle: "Choose a zone and a Warden."
+                )
+
+                if viewModel.zones.isEmpty && !viewModel.isLoading {
+                    AppMessageView(
+                        title: "No parking zones available",
+                        message: "Create a parking zone before assigning coverage."
+                    )
                 }
 
-                if viewModel.wardens.isEmpty {
-                    Text("Approve a Warden application first.")
-                        .foregroundStyle(AppColors.textSecondary)
+                if viewModel.wardens.isEmpty && !viewModel.isLoading {
+                    AppMessageView(
+                        title: "No Wardens available",
+                        message: "Approve a Warden application before creating an assignment."
+                    )
                 }
+
+                if !viewModel.zones.isEmpty && !viewModel.wardens.isEmpty {
+                    Picker("Parking zone", selection: $viewModel.selectedZoneId) {
+                        Text("Choose a zone").tag("")
+
+                        ForEach(viewModel.zones) { zone in
+                            Text(zone.name).tag(zone.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(.vertical, AppSpacing.xSmall)
+
+                    Picker("Warden", selection: $viewModel.selectedWardenId) {
+                        Text("Choose a Warden").tag("")
+
+                        ForEach(viewModel.wardens) { warden in
+                            Text(warden.name).tag(warden.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(.vertical, AppSpacing.xSmall)
+
+                    AppButton(
+                        title: "Assign Warden",
+                        systemImage: "person.badge.plus",
+                        isLoading: viewModel.isLoading
+                    ) {
+                        Task {
+                            await viewModel.createAssignment(
+                                adminUserId: adminUserId
+                            )
+                        }
+                    }
+                    .disabled(
+                        viewModel.isLoading
+                            || viewModel.selectedZoneId.isEmpty
+                            || viewModel.selectedWardenId.isEmpty
+                    )
+                }
+
+                Text("An assignment does not publish or activate the zone.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
             }
-
-            if !viewModel.zones.isEmpty,
-               !viewModel.wardens.isEmpty {
-                Picker(
-                    "Parking zone",
-                    selection: $viewModel.selectedZoneId
-                ) {
-                    Text("Choose a zone").tag("")
-
-                    ForEach(viewModel.zones) { zone in
-                        Text(zone.name).tag(zone.id)
-                    }
-                }
-
-                Picker(
-                    "Warden",
-                    selection: $viewModel.selectedWardenId
-                ) {
-                    Text("Choose a Warden").tag("")
-
-                    ForEach(viewModel.wardens) { warden in
-                        Text(warden.name).tag(warden.id)
-                    }
-                }
-
-                Button {
-                    Task {
-                        await viewModel.createAssignment(
-                            adminUserId: adminUserId
-                        )
-                    }
-                } label: {
-                    Text("Assign Warden")
-                        .font(AppTypography.bodyBold)
-                        .foregroundStyle(AppColors.accent)
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                        .background(
-                            AppColors.buttonBackground,
-                            in: Capsule()
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        } header: {
-            Text("New assignment")
-        } footer: {
-            Text("Assigning a Warden does not publish the zone.")
         }
-        .listRowBackground(AppColors.card)
     }
 
     private var assignmentsSection: some View {
-        Section("Assignments") {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            AppSectionHeader(title: "Assignments")
+
             if viewModel.assignments.isEmpty,
                !viewModel.isLoading,
                viewModel.errorMessage.isEmpty {
-                Text("No assignments yet.")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-
-            ForEach(viewModel.assignments) { assignment in
-                assignmentRow(assignment: assignment)
+                AppEmptyStateView(
+                    title: "No assignments yet",
+                    message: "Current and ended Warden coverage will appear here.",
+                    systemImage: "person.2"
+                )
+            } else {
+                ForEach(viewModel.assignments) { assignment in
+                    assignmentCard(assignment: assignment)
+                }
             }
         }
-        .listRowBackground(AppColors.card)
     }
 
-    private func assignmentRow(
-        assignment: WardenAssignment
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(zoneName(zoneId: assignment.parkingZoneId))
-                .font(AppTypography.titleSmall)
+    private func assignmentCard(assignment: WardenAssignment) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                HStack(alignment: .top, spacing: AppSpacing.small) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                        Text(zoneName(zoneId: assignment.parkingZoneId))
+                            .font(AppTypography.titleSmall)
 
-            Text(wardenName(userId: assignment.wardenUserId))
+                        Text(wardenName(userId: assignment.wardenUserId))
+                            .font(AppTypography.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(assignment.isActive ? "Active" : "Ended")
-                .font(AppTypography.captionBold)
-                .foregroundStyle(
-                    assignment.isActive
-                        ? AppColors.statusValid
-                        : AppColors.statusNeutral
-                )
-
-            Text(
-                "Started: "
-                + assignment.assignedAt.formatted(
-                    date: .abbreviated,
-                    time: .shortened
-                )
-            )
-            .font(AppTypography.caption)
-            .foregroundStyle(AppColors.textSecondary)
-
-            if let endedAt = assignment.endedAt {
-                Text(
-                    "Ended: "
-                    + endedAt.formatted(
-                        date: .abbreviated,
-                        time: .shortened
+                    AppStatusBadge(
+                        title: assignment.isActive ? "Active" : "Ended",
+                        appearance: assignment.isActive ? .success : .neutral
                     )
+                }
+
+                Label(
+                    "Started \(assignment.assignedAt.formatted(date: .abbreviated, time: .shortened))",
+                    systemImage: "calendar"
                 )
                 .font(AppTypography.caption)
                 .foregroundStyle(AppColors.textSecondary)
-            }
 
-            if assignment.isActive {
-                Button("End Assignment", role: .destructive) {
-                    selectedAssignment = assignment
-                    showEndConfirmation = true
+                if let endedAt = assignment.endedAt {
+                    Label(
+                        "Ended \(endedAt.formatted(date: .abbreviated, time: .shortened))",
+                        systemImage: "calendar.badge.clock"
+                    )
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
                 }
-                .buttonStyle(.bordered)
-                .tint(AppColors.statusOverstay)
+
+                if assignment.isActive {
+                    AppButton(
+                        title: "End Assignment",
+                        systemImage: "person.badge.minus",
+                        appearance: .destructive
+                    ) {
+                        selectedAssignment = assignment
+                        showEndConfirmation = true
+                    }
+                    .disabled(viewModel.isLoading)
+                }
             }
         }
-        .padding(.vertical, AppSpacing.xSmall)
     }
 
     private func zoneName(zoneId: String) -> String {
-        return viewModel.zones.first {
-            $0.id == zoneId
-        }?.name ?? zoneId
+        viewModel.zones.first { $0.id == zoneId }?.name ?? zoneId
     }
 
     private func wardenName(userId: String) -> String {
-        return viewModel.wardens.first {
-            $0.id == userId
-        }?.name ?? userId
+        viewModel.wardens.first { $0.id == userId }?.name ?? userId
     }
 }

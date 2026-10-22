@@ -9,41 +9,42 @@ import SwiftUI
 
 struct SignInView: View {
     @State private var viewModel = SignInViewModel()
+    @FocusState private var focusedField: Field?
     var title = "Welcome back"
     var message = "Sign in to your SpotShield account."
     var showWardenSignUp = false
+    var navigationTitle = "Sign In"
+
+    private enum Field { case email, password }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.large) {
-                header
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                AuthenticationHeaderView(title: title, message: message)
                 fields
                 forgotPasswordButton
 
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusOverstay)
-                        .multilineTextAlignment(.center)
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 }
 
                 if !viewModel.successMessage.isEmpty {
-                    Text(viewModel.successMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusValid)
-                        .multilineTextAlignment(.center)
+                    AppMessageView(title: "Check your email", message: viewModel.successMessage, appearance: .success)
                 }
 
-                signInButton
+                AppButton(title: viewModel.isLoading ? "Signing in…" : "Sign In", isLoading: viewModel.isLoading) {
+                    focusedField = nil
+                    Task { await viewModel.signIn() }
+                }
+                .disabled(viewModel.isBusy)
 
                 if showWardenSignUp {
                     NavigationLink {
                         WardenSignUpView()
                     } label: {
                         Text("Apply as a Warden")
-                            .font(AppTypography.bodyBold)
-                            .frame(minHeight: AppSpacing.minTouchTarget)
                     }
+                    .buttonStyle(AppButtonStyle(appearance: .secondary))
                     .disabled(viewModel.isBusy)
                 }
             }
@@ -55,113 +56,62 @@ struct SignInView: View {
         .foregroundStyle(AppColors.textPrimary)
         .tint(AppColors.textPrimary)
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Sign In")
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var header: some View {
-        VStack(spacing: AppSpacing.medium) {
-            Image("SpotShieldLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .accessibilityHidden(true)
-
-            Text(title)
-                .font(AppTypography.titleLarge)
-
-            Text(message)
-                .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textSecondary)
-        }
-        .multilineTextAlignment(.center)
-        .padding(.vertical, AppSpacing.large)
+        .navigationBarBackButtonHidden(viewModel.isLoading)
     }
 
     private var fields: some View {
         VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text("Email")
-                .font(AppTypography.bodyBold)
-
-            TextField("Enter your email", text: $viewModel.email)
+            Text("Email").font(AppTypography.bodyBold)
+            TextField(
+                "Email",
+                text: $viewModel.email,
+                prompt: Text("Enter your email").foregroundStyle(AppColors.textSecondary)
+            )
                 .keyboardType(.emailAddress)
                 .textContentType(.username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .padding(AppSpacing.medium)
-                .background(
-                    AppColors.card,
-                    in: RoundedRectangle(
-                        cornerRadius: AppSpacing.radiusButton
-                    )
-                )
+                .accessibilityLabel("Email")
+                .focused($focusedField, equals: .email)
+                .submitLabel(.next)
+                .onSubmit { focusedField = .password }
 
             Text("Password")
                 .font(AppTypography.bodyBold)
                 .padding(.top, AppSpacing.xSmall)
-
-            SecureField("Enter your password", text: $viewModel.password)
+            SecureField(
+                "Password",
+                text: $viewModel.password,
+                prompt: Text("Enter your password").foregroundStyle(AppColors.textSecondary)
+            )
                 .textContentType(.password)
+                .accessibilityLabel("Password")
+                .focused($focusedField, equals: .password)
                 .submitLabel(.go)
                 .onSubmit {
-                    Task {
-                        await viewModel.signIn()
-                    }
+                    focusedField = nil
+                    Task { await viewModel.signIn() }
                 }
-                .padding(AppSpacing.medium)
-                .background(
-                    AppColors.card,
-                    in: RoundedRectangle(
-                        cornerRadius: AppSpacing.radiusButton
-                    )
-                )
         }
-        .font(AppTypography.bodyMedium)
+        .textFieldStyle(AppTextFieldStyle())
         .disabled(viewModel.isBusy)
     }
 
     private var forgotPasswordButton: some View {
         Button {
-            Task {
-                await viewModel.sendPasswordReset()
-            }
+            focusedField = nil
+            Task { await viewModel.sendPasswordReset() }
         } label: {
-            Text(
-                viewModel.isSendingPasswordReset
-                    ? "Sending reset link..."
-                    : "Forgot Password?"
-            )
-            .font(AppTypography.bodyBold)
-            .frame(minHeight: AppSpacing.minTouchTarget)
+            Text(viewModel.isSendingPasswordReset ? "Sending reset link…" : "Forgot Password?")
+                .font(AppTypography.bodyBold)
+                .padding(.vertical, AppSpacing.xSmall)
+                .frame(minHeight: AppSpacing.minTouchTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .disabled(viewModel.isBusy)
     }
-
-    private var signInButton: some View {
-        Button {
-            Task {
-                await viewModel.signIn()
-            }
-        } label: {
-            HStack(spacing: AppSpacing.small) {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(AppColors.accent)
-
-                    Text("Signing in...")
-                } else {
-                    Text("Sign In")
-                }
-            }
-            .font(AppTypography.bodyBold)
-            .foregroundStyle(AppColors.accent)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(AppColors.buttonBackground, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(viewModel.isBusy)
-    }
 }
-

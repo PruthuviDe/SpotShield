@@ -22,14 +22,19 @@ struct ParkingHistoryView: View {
                 alignment: .leading,
                 spacing: AppSpacing.large
             ) {
+                NavigationLink {
+                    MotoristTicketsView()
+                } label: {
+                    Label("Tickets", systemImage: "doc.text")
+                }
+                .buttonStyle(AppButtonStyle(appearance: .secondary))
+
                 if viewModel.isLoading {
-                    ProgressView("Loading parking history...")
+                    AppLoadingView(title: "Loading parking history…")
                 } else if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .foregroundStyle(AppColors.statusOverstay)
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 } else if viewModel.sessions.isEmpty {
-                    Text("No ended parking sessions yet.")
-                        .foregroundStyle(AppColors.textSecondary)
+                    AppEmptyStateView(title: "No parking history yet", message: "Your completed parking sessions will appear here.", systemImage: "clock.arrow.circlepath")
                 } else {
                     Text(
                         "Showing up to 50 ended sessions. "
@@ -43,21 +48,21 @@ struct ParkingHistoryView: View {
                     }
                 }
 
-                Button("Refresh") {
+                AppButton(title: "Refresh History", systemImage: "arrow.clockwise", appearance: .secondary) {
                     Task {
                         await viewModel.loadHistory()
                     }
                 }
-                .buttonStyle(.bordered)
                 .disabled(viewModel.isLoading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("Parking History")
+        .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadHistory()
@@ -70,48 +75,36 @@ struct ParkingHistoryView: View {
     private func sessionCard(
         session: ParkingSession
     ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text(session.zoneName)
-                .font(AppTypography.titleSmall)
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppStatusBadge(title: "Completed")
+                Text(session.zoneName)
+                    .font(AppTypography.titleSmall)
 
-            Text(session.licensePlate)
-                .font(AppTypography.bodyBold)
+                Text(session.licensePlate)
+                    .font(AppTypography.bodyBold)
 
-            Text("Ended")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
+                Divider()
 
-            Divider()
-
-            Text("Started: \(formattedDate(session.startTime))")
-                .foregroundStyle(AppColors.textSecondary)
-
-            Text("Paid until: \(formattedDate(session.paidUntil))")
-                .foregroundStyle(AppColors.textSecondary)
-
-            if let endTime = session.endTime {
-                Text("Ended: \(formattedDate(endTime))")
+                Text("Started: \(formattedDate(session.startTime))")
                     .foregroundStyle(AppColors.textSecondary)
+
+                Text("Paid until: \(formattedDate(session.paidUntil))")
+                    .foregroundStyle(AppColors.textSecondary)
+
+                if let endTime = session.endTime {
+                    Text("Ended: \(formattedDate(endTime))")
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                Text("Purchased time: \(session.durationMinutes) minutes")
+                    .foregroundStyle(AppColors.textSecondary)
+
+                Text("Paid: LKR \(session.totalPaidLKR.formatted())")
+                    .font(AppTypography.bodyBold)
+
             }
-
-            Text("Purchased time: \(session.durationMinutes) minutes")
-                .foregroundStyle(AppColors.textSecondary)
-
-            Text("Paid: LKR \(session.totalPaidLKR.formatted())")
-                .font(AppTypography.bodyBold)
-
-            Text("Demo payment. No real money was charged.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 
     private func formattedDate(_ date: Date) -> String {

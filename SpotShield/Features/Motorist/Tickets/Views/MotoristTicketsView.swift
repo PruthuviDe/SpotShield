@@ -14,60 +14,35 @@ struct MotoristTicketsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppSpacing.large) {
-                Text("These tickets are simulations. No real fines or payments are involved.")
-                    .foregroundStyle(AppColors.textSecondary)
+                AppSectionHeader(title: "Your tickets", subtitle: "Review issued tickets and track wallet payments.")
                 if viewModel.isLoading {
-                    ProgressView("Loading tickets...")
+                    AppLoadingView(title: "Loading tickets…")
                 } else if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage).foregroundStyle(AppColors.statusOverstay)
+                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
                 } else if viewModel.tickets.isEmpty {
-                    Text("You have no demo tickets.")
+                    AppEmptyStateView(title: "No tickets to show", message: "Any tickets issued to your vehicle will appear here.", systemImage: "doc.text")
                 } else {
                     ForEach(viewModel.tickets) { ticket in
-                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                            Text(ticket.zoneName).font(AppTypography.titleSmall)
-                            Text(ticket.licensePlate).font(AppTypography.bodyBold)
-                            Text("LKR \(ticket.fineAmountLKR) • \(ticket.paymentStatus.rawValue)")
-                            Text(ticket.reason)
-                            Text(ticket.issuedAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(AppTypography.caption)
-                            Text("Ticket: \(ticket.id)").font(AppTypography.caption)
-                            if let paymentMessage = ticket.paymentMessage, !paymentMessage.isEmpty {
-                                Text(paymentMessage)
-                                    .font(AppTypography.caption)
-                                    .foregroundStyle(AppColors.textSecondary)
-                            }
-                            if ticket.paymentStatus == .due {
-                                Button("Pay LKR \(ticket.fineAmountLKR) from wallet") {
-                                    ticketToConfirm = ticket
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(viewModel.payingTicketId != nil)
-                            }
-                            if viewModel.payingTicketId == ticket.id {
-                                ProgressView("Paying demo ticket...")
-                            }
-                            if let message = viewModel.paymentErrors[ticket.id] {
-                                Text(message).foregroundStyle(AppColors.statusOverstay)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppSpacing.medium)
-                        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
+                        ticketCard(ticket)
                     }
                 }
-                Button("Refresh") { Task { await viewModel.loadTickets() } }
-                    .buttonStyle(.bordered)
-                    .disabled(viewModel.isLoading)
+                AppButton(title: "Refresh Tickets", systemImage: "arrow.clockwise", appearance: .secondary) {
+                    Task { await viewModel.loadTickets() }
+                }
+                .disabled(viewModel.isLoading || viewModel.payingTicketId != nil)
             }
             .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("My Demo Tickets")
+        .navigationTitle("Tickets")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.loadTickets() }
+        .refreshable { await viewModel.loadTickets() }
         .confirmationDialog(
-            "Pay LKR \(ticketToConfirm?.fineAmountLKR ?? 0) from your demo wallet?",
+            "Pay LKR \(ticketToConfirm?.fineAmountLKR.formatted() ?? "0") from your wallet?",
             isPresented: Binding(
                 get: { ticketToConfirm != nil },
                 set: { if !$0 { ticketToConfirm = nil } }
@@ -75,14 +50,51 @@ struct MotoristTicketsView: View {
             titleVisibility: .visible
         ) {
             if let ticket = ticketToConfirm {
-                Button("Confirm demo payment") {
+                Button("Confirm Payment") {
                     Task { await viewModel.payTicket(ticket) }
                     ticketToConfirm = nil
                 }
             }
             Button("Cancel", role: .cancel) { ticketToConfirm = nil }
         } message: {
-            Text("This will deduct the ticket amount once from your demo wallet. No real money is involved.")
+            Text("The ticket amount will be deducted from your wallet once.")
+        }
+    }
+
+    private func ticketCard(_ ticket: SimulatedTicket) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppStatusBadge(title: ticket.paymentStatus.rawValue, appearance: ticket.paymentStatus == .paid ? .success : .warning)
+                Text(ticket.zoneName).font(AppTypography.titleMedium)
+                Label(ticket.licensePlate, systemImage: "car").font(AppTypography.bodyBold)
+                Text("LKR \(ticket.fineAmountLKR.formatted())").font(AppTypography.priceDisplay)
+                Text(ticket.reason)
+                Text(ticket.issuedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+                Text("Ticket ID: \(ticket.id)")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .textSelection(.enabled)
+                if let message = ticket.paymentMessage, !message.isEmpty {
+                    Text(message.replacingOccurrences(of: "demo wallet", with: "wallet"))
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                if ticket.paymentStatus == .due {
+                    AppButton(
+                        title: viewModel.payingTicketId == ticket.id ? "Paying…" : "Pay LKR \(ticket.fineAmountLKR.formatted())",
+                        systemImage: "wallet.bifold",
+                        isLoading: viewModel.payingTicketId == ticket.id
+                    ) {
+                        ticketToConfirm = ticket
+                    }
+                    .disabled(viewModel.payingTicketId != nil || viewModel.isLoading)
+                }
+                if let message = viewModel.paymentErrors[ticket.id] {
+                    AppMessageView(title: message, appearance: .error)
+                }
+            }
         }
     }
 }

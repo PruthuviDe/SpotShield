@@ -12,107 +12,57 @@ struct ParkingZoneDetailView: View {
     @Environment(AppState.self) private var appState
 
     init(zone: ParkingZone) {
-        _viewModel = State(
-            initialValue: ParkingZoneDetailViewModel(zone: zone)
-        )
+        _viewModel = State(initialValue: ParkingZoneDetailViewModel(zone: zone))
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
-                zoneDetails
-                openingDetails
-
-                Text(
-                    "These details were loaded from the parking zone list. "
-                    + "Go back and tap Refresh to load any changes."
-                )
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
+                Text(viewModel.zone.name)
+                    .font(AppTypography.titleLarge)
+                    .accessibilityAddTraits(.isHeader)
+                AppCard {
+                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                        AppSectionHeader(title: "Parking rate")
+                        Text("LKR \(viewModel.zone.hourlyRateLKR.formatted()) / hour")
+                            .font(AppTypography.titleMedium)
+                        Label("Maximum stay: \(viewModel.zone.maximumStayMinutes) minutes", systemImage: "hourglass")
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                AppCard {
+                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                        AppSectionHeader(title: "Opening hours")
+                        Label("\(String(format: "%02d:00", viewModel.zone.openingHour))–\(String(format: "%02d:00", viewModel.zone.closingHour))", systemImage: "clock")
+                            .font(AppTypography.bodyBold)
+                        TimelineView(.periodic(from: .now, by: 60)) { clock in
+                            let status = viewModel.openingStatus(at: clock.date)
+                            AppStatusBadge(title: status, appearance: status == "Open now" ? .success : .neutral)
+                        }
+                        Text("Sri Lanka time")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                if case .signedIn(let profile) = appState.authState, profile.role == .motorist {
+                    NavigationLink {
+                        ParkingSetupView(zone: viewModel.zone, profile: profile)
+                    } label: {
+                        Label("Set Up Parking", systemImage: "parkingsign.circle")
+                    }
+                    .buttonStyle(AppButtonStyle())
+                }
+                Text("Rates and availability are checked again when you start parking.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
             }
             .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Zone Details")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var zoneDetails: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text(viewModel.zone.name)
-                .font(AppTypography.titleMedium)
-
-            Text("LKR \(viewModel.zone.hourlyRateLKR) per hour")
-                .font(AppTypography.priceDisplay)
-
-            Text(
-                "Maximum stay: "
-                + "\(viewModel.zone.maximumStayMinutes) minutes"
-            )
-            .foregroundStyle(AppColors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
-    }
-
-    private var openingDetails: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text("Opening hours")
-                .font(AppTypography.titleSmall)
-
-            Text(
-                "\(viewModel.zone.openingHour):00"
-                + "–\(viewModel.zone.closingHour):00"
-            )
-
-            Text("Hours are shown in Sri Lanka time.")
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
-
-            TimelineView(.periodic(from: .now, by: 1)) { clock in
-                Text(viewModel.openingStatus(at: clock.date))
-                    .font(AppTypography.bodyBold)
-            }
-
-            if case .signedIn(let profile) = appState.authState {
-                if profile.role == .motorist {
-                    NavigationLink {
-                        ParkingSetupView(
-                            zone: viewModel.zone,
-                            profile: profile
-                        )
-                    } label: {
-                        Text("Check My Vehicle")
-                            .font(AppTypography.bodyBold)
-                            .frame(maxWidth: .infinity)
-                            .padding(AppSpacing.medium)
-                            .foregroundStyle(AppColors.textOnAccent)
-                            .background(
-                                AppColors.accent,
-                                in: RoundedRectangle(
-                                    cornerRadius: AppSpacing.radiusButton
-                                )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 }

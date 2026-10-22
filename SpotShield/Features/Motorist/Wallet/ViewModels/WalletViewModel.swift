@@ -118,7 +118,7 @@ final class WalletViewModel {
 
         do {
             try await repository.addDemoFunds(userId: profile.id)
-            successMessage = "LKR 1,000 demo funds added."
+            successMessage = "LKR 1,000 added to your wallet."
             await refreshWallet(clearMessages: false)
         } catch {
             errorMessage = "Could not confirm the top-up. Tap again to retry safely."
@@ -138,7 +138,7 @@ final class WalletViewModel {
             try await repository.setTicketAutoDeduct(enabled: enabled)
             wallet?.autoDeductEnabled = enabled
             successMessage = enabled
-                ? "Auto-deduction is on for new demo tickets."
+                ? "Auto-deduction is on for new tickets."
                 : "Auto-deduction is off."
         } catch {
             errorMessage = "Could not save this wallet setting. Refresh and try again."

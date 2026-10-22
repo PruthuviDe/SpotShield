@@ -9,50 +9,63 @@ import SwiftUI
 
 struct ParkingZonesView: View {
     @State private var viewModel = ParkingZonesViewModel()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var showCreateZone = false
     @State private var selectedZone: ParkingZone?
-
     @State private var zoneForAction: ParkingZone?
     @State private var showZoneAction = false
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.medium) {
-                if viewModel.isLoading {
-                    ProgressView("Please wait...")
-                }
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(
+                    title: "Zone list",
+                    subtitle: "Manage rates, hours and zone availability."
+                )
 
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusOverstay)
+                    AppMessageView(
+                        title: "Could not update parking zones",
+                        message: viewModel.errorMessage,
+                        appearance: .error
+                    )
                 }
 
                 if !viewModel.successMessage.isEmpty {
-                    Text(viewModel.successMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusValid)
+                    AppMessageView(
+                        title: viewModel.successMessage,
+                        appearance: .success
+                    )
                 }
 
-                if viewModel.zones.isEmpty,
-                   !viewModel.isLoading,
-                   viewModel.errorMessage.isEmpty {
-                    Text("No parking zones yet. Tap Add Zone to create one.")
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
+                if viewModel.isLoading && viewModel.zones.isEmpty {
+                    AppLoadingView(title: "Loading parking zones…")
+                } else if viewModel.zones.isEmpty,
+                          viewModel.errorMessage.isEmpty {
+                    AppEmptyStateView(
+                        title: "No parking zones",
+                        message: "Add a zone to set its price, hours and location.",
+                        systemImage: "mappin.and.ellipse"
+                    )
+                } else {
+                    ForEach(viewModel.zones) { zone in
+                        zoneCard(zone: zone)
+                    }
                 }
 
-                ForEach(viewModel.zones) { zone in
-                    zoneCard(zone: zone)
-                }
-
-                Button("Refresh") {
+                AppButton(
+                    title: "Refresh",
+                    systemImage: "arrow.clockwise",
+                    appearance: .secondary,
+                    isLoading: viewModel.isLoading
+                ) {
                     reloadZones()
                 }
             }
             .padding(AppSpacing.large)
-            .disabled(viewModel.isLoading)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
@@ -60,7 +73,6 @@ struct ParkingZonesView: View {
         .tint(AppColors.textPrimary)
         .navigationTitle("Parking Zones")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(viewModel.isLoading)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -72,6 +84,9 @@ struct ParkingZonesView: View {
             }
         }
         .task {
+            await viewModel.loadZones()
+        }
+        .refreshable {
             await viewModel.loadZones()
         }
         .sheet(
@@ -99,9 +114,7 @@ struct ParkingZonesView: View {
                     }
                 }
             } else {
-                ForEach(
-                    viewModel.activeAssignments(zoneId: zone.id)
-                ) { assignment in
+                ForEach(viewModel.activeAssignments(zoneId: zone.id)) { assignment in
                     Button {
                         Task {
                             await viewModel.publishZone(
@@ -111,25 +124,28 @@ struct ParkingZonesView: View {
                         }
                     } label: {
                         Text(
-                            "Confirm with "
-                            + viewModel.wardenName(
-                                userId: assignment.wardenUserId
-                            )
+                            actionTitle(for: zone)
+                            + " with "
+                            + viewModel.wardenName(userId: assignment.wardenUserId)
                         )
                     }
                 }
             }
 
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { }
         } message: { zone in
             if zone.isActive {
                 Text(
-                    "Make \(zone.name) inactive? "
-                    + "Its saved details and history will be kept."
+                    "Make \(zone.name) inactive? Its details and history will be kept."
+                )
+            } else if zone.isPublished {
+                Text(
+                    "Choose an active Warden to activate \(zone.name). "
+                    + "Hourly price: LKR \(zone.hourlyRateLKR)."
                 )
             } else {
                 Text(
-                    "Choose a Warden to make \(zone.name) active. "
+                    "Choose an active Warden to publish and activate \(zone.name). "
                     + "Hourly price: LKR \(zone.hourlyRateLKR)."
                 )
             }
@@ -137,99 +153,109 @@ struct ParkingZonesView: View {
     }
 
     private func zoneCard(zone: ParkingZone) -> some View {
-        let availableAssignments = viewModel.activeAssignments(
-            zoneId: zone.id
-        )
+        let availableAssignments = viewModel.activeAssignments(zoneId: zone.id)
 
-        return VStack(alignment: .leading, spacing: AppSpacing.small) {
-            Text(zone.name)
-                .font(AppTypography.titleSmall)
+        return AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                HStack(alignment: .top, spacing: AppSpacing.small) {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: AppSpacing.small) {
+                            Text(zone.name)
+                                .font(AppTypography.titleSmall)
 
-            Text("LKR \(zone.hourlyRateLKR) per hour")
-                .font(AppTypography.bodyBold)
+                            zoneStatusBadge(zone: zone)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text(zone.name)
+                            .font(AppTypography.titleSmall)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text("Hours: \(zone.openingHour):00–\(zone.closingHour):00")
+                        zoneStatusBadge(zone: zone)
+                    }
+                }
 
-            Text("Maximum stay: \(zone.maximumStayMinutes) minutes")
-
-            HStack {
-                Text(zoneStatus(zone: zone))
-                    .font(AppTypography.captionBold)
-                    .foregroundStyle(
-                        zone.isActive
-                            ? AppColors.statusValid
-                            : AppColors.statusNeutral
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    Label("LKR \(zone.hourlyRateLKR) per hour", systemImage: "banknote")
+                    Label(
+                        "\(zone.openingHour):00–\(zone.closingHour):00",
+                        systemImage: "clock"
                     )
-
-                Spacer()
-
-                Button("Edit") {
-                    selectedZone = zone
-                }
-                .buttonStyle(.bordered)
-                .frame(minHeight: AppSpacing.minTouchTarget)
-            }
-
-            if zone.isActive {
-                Button("Deactivate Zone", role: .destructive) {
-                    zoneForAction = zone
-                    showZoneAction = true
-                }
-                .buttonStyle(.bordered)
-                .tint(AppColors.statusOverstay)
-                .frame(minHeight: AppSpacing.minTouchTarget)
-            } else {
-                if availableAssignments.isEmpty {
-                    Text(
-                        "Assign an active Warden to this zone "
-                        + "before publishing or activating it."
+                    Label(
+                        "Maximum stay: \(zone.maximumStayMinutes) minutes",
+                        systemImage: "timer"
                     )
-                    .font(AppTypography.bodySmall)
-                    .foregroundStyle(AppColors.textSecondary)
                 }
+                .font(AppTypography.bodySmall)
+                .foregroundStyle(AppColors.textSecondary)
 
                 Button {
-                    zoneForAction = zone
-                    showZoneAction = true
+                    selectedZone = zone
                 } label: {
-                    Text(
-                        zone.isPublished
-                            ? "Activate Zone"
-                            : "Publish Zone"
-                    )
-                    .font(AppTypography.bodyBold)
-                    .frame(
-                        maxWidth: .infinity,
-                        minHeight: AppSpacing.minTouchTarget
+                    managementButtonLabel(
+                        title: "Edit zone",
+                        systemImage: "pencil"
                     )
                 }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .tint(AppColors.buttonBackground)
-                .foregroundStyle(AppColors.accent)
-                .disabled(availableAssignments.isEmpty)
+                .buttonStyle(AppButtonStyle(appearance: .secondary))
+                .disabled(viewModel.isLoading)
+
+                if zone.isActive {
+                    AppButton(
+                        title: "Deactivate Zone",
+                        systemImage: "pause.circle",
+                        appearance: .destructive,
+                        isLoading: viewModel.isLoading
+                    ) {
+                        zoneForAction = zone
+                        showZoneAction = true
+                    }
+                } else {
+                    if availableAssignments.isEmpty {
+                        Text("Assign an active Warden to this zone before publishing or activating it.")
+                            .font(AppTypography.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+
+                    AppButton(
+                        title: actionTitle(for: zone),
+                        systemImage: zone.isPublished ? "checkmark.circle" : "paperplane",
+                        isLoading: viewModel.isLoading
+                    ) {
+                        zoneForAction = zone
+                        showZoneAction = true
+                    }
+                    .disabled(viewModel.isLoading || availableAssignments.isEmpty)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 
-    private func zoneStatus(zone: ParkingZone) -> String {
+    private func zoneStatusBadge(zone: ParkingZone) -> some View {
         if !zone.isPublished {
-            return "Draft"
+            AppStatusBadge(title: "Draft")
+        } else if zone.isActive {
+            AppStatusBadge(title: "Active", appearance: .success)
+        } else {
+            AppStatusBadge(title: "Inactive", appearance: .warning)
         }
+    }
 
-        if zone.isActive {
-            return "Published · Active"
+    private func actionTitle(for zone: ParkingZone) -> String {
+        zone.isPublished ? "Activate Zone" : "Publish Zone"
+    }
+
+    private func managementButtonLabel(
+        title: String,
+        systemImage: String
+    ) -> some View {
+        HStack(spacing: AppSpacing.small) {
+            Image(systemName: systemImage)
+                .accessibilityHidden(true)
+            Text(title)
         }
-
-        return "Published · Inactive"
+        .frame(maxWidth: .infinity, minHeight: AppSpacing.minTouchTarget)
+        .contentShape(Capsule())
     }
 
     private func reloadZones() {

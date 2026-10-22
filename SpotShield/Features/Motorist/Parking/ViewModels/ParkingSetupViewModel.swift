@@ -25,11 +25,15 @@ final class ParkingSetupViewModel {
     var selectedMinutes = 0
     var selectedExtensionMinutes = 0
     var isParkedHere = false
+    var walletBalanceLKR: Int?
+    var walletErrorMessage = ""
+    var isLoadingWallet = false
 
     private let profile: UserProfile
     private let expectedSessionId: String?
     private let userRepository = UserProfileRepository()
     private let sessionRepository = ParkingSessionRepository()
+    private let walletRepository = WalletRepository()
     private let notificationManager = NotificationManager.shared
 
     private var hasLoadedActiveSession = false
@@ -43,7 +47,7 @@ final class ParkingSetupViewModel {
 
     var isBusy: Bool {
         isLoading || isLoadingSession || isStartingParking
-            || isEndingParking || isExtendingParking
+            || isEndingParking || isExtendingParking || isLoadingWallet
     }
 
     var notificationMessage: String {
@@ -319,6 +323,23 @@ final class ParkingSetupViewModel {
 
         await loadVehicle()
         await loadActiveSession()
+        await loadWalletBalance()
+    }
+
+    func loadWalletBalance() async {
+        guard !isLoadingWallet, !Task.isCancelled else { return }
+        isLoadingWallet = true
+        walletBalanceLKR = nil
+        walletErrorMessage = ""
+        defer { isLoadingWallet = false }
+        do {
+            let wallet = try await walletRepository.getWallet(userId: profile.id)
+            guard !Task.isCancelled else { return }
+            walletBalanceLKR = wallet?.balanceLKR ?? 0
+        } catch {
+            guard !Task.isCancelled else { return }
+            walletErrorMessage = "Balance unavailable. Refresh to try again."
+        }
     }
 
     func startParking(zone: ParkingZone) async {
@@ -437,7 +458,8 @@ final class ParkingSetupViewModel {
                 userId: profile.id
             )
 
-            successMessage = "Parking started. LKR \(price) paid from your demo wallet."
+            successMessage = "Parking started. LKR \(price) paid from your wallet."
+            await loadWalletBalance()
         } catch {
             parkingErrorMessage =
                 "Could not start parking: \(error.localizedDescription)"
@@ -560,7 +582,8 @@ final class ParkingSetupViewModel {
                 return
             }
 
-            successMessage = "Parking extended. LKR \(amountLKR) paid from your demo wallet."
+            successMessage = "Parking extended. LKR \(amountLKR) paid from your wallet."
+            await loadWalletBalance()
         } catch {
             guard !Task.isCancelled else {
                 return

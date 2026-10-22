@@ -16,43 +16,53 @@ struct WardenRequestsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.large) {
-                Text("Waiting applications")
-                    .font(AppTypography.titleMedium)
-
-                if viewModel.isLoading {
-                    ProgressView("Please wait...")
-                }
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                AppSectionHeader(
+                    title: "Applications",
+                    subtitle: "Review requests for Warden access."
+                )
 
                 if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(AppTypography.bodySmall)
-                        .foregroundStyle(AppColors.statusOverstay)
-                        .multilineTextAlignment(.center)
+                    AppMessageView(
+                        title: "Could not load applications",
+                        message: viewModel.errorMessage,
+                        appearance: .error
+                    )
                 }
 
-                if viewModel.requests.isEmpty
-                    && !viewModel.isLoading
-                    && viewModel.errorMessage.isEmpty {
-                    Text("There are no applications waiting for review.")
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
+                if !viewModel.successMessage.isEmpty {
+                    AppMessageView(
+                        title: viewModel.successMessage,
+                        appearance: .success
+                    )
                 }
 
-                ForEach(viewModel.requests) { request in
-                    requestCard(request: request)
-                }
-
-                Button("Refresh") {
-                    Task {
-                        await viewModel.loadRequests()
+                if viewModel.isLoading && viewModel.requests.isEmpty {
+                    AppLoadingView(title: "Loading applications…")
+                } else if viewModel.requests.isEmpty,
+                          viewModel.errorMessage.isEmpty {
+                    AppEmptyStateView(
+                        title: "No applications waiting",
+                        message: "New Warden applications will appear here for review.",
+                        systemImage: "person.badge.plus"
+                    )
+                } else {
+                    ForEach(viewModel.requests) { request in
+                        requestCard(request: request)
                     }
                 }
-                .frame(minHeight: AppSpacing.minTouchTarget)
-                .disabled(viewModel.isLoading)
+
+                AppButton(
+                    title: "Refresh",
+                    systemImage: "arrow.clockwise",
+                    appearance: .secondary,
+                    isLoading: viewModel.isLoading
+                ) {
+                    Task { await viewModel.loadRequests() }
+                }
             }
             .padding(AppSpacing.large)
-            .frame(maxWidth: 600)
+            .frame(maxWidth: 620, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
         .font(AppTypography.bodyMedium)
@@ -62,6 +72,9 @@ struct WardenRequestsView: View {
         .navigationTitle("Warden Applications")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            await viewModel.loadRequests()
+        }
+        .refreshable {
             await viewModel.loadRequests()
         }
         .confirmationDialog(
@@ -88,56 +101,43 @@ struct WardenRequestsView: View {
                 }
             }
 
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { }
         } message: { request in
             Text("Approve to give \(request.name) Warden access, or reject this application.")
         }
     }
 
-    private func requestCard(
-        request: WardenRequest
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
-            Text(request.name)
-                .font(AppTypography.titleSmall)
+    private func requestCard(request: WardenRequest) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                HStack(alignment: .top) {
+                    Text(request.name)
+                        .font(AppTypography.titleSmall)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(request.email)
+                    AppStatusBadge(title: "Awaiting review", appearance: .warning)
+                }
+
+                Text(request.email)
+                    .font(AppTypography.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
+
+                Label(
+                    "Applied \(request.createdAt.formatted(date: .abbreviated, time: .omitted))",
+                    systemImage: "calendar"
+                )
+                .font(AppTypography.caption)
                 .foregroundStyle(AppColors.textSecondary)
 
-            HStack {
-                Text("Applied:")
-
-                Text(request.createdAt, style: .date)
+                AppButton(
+                    title: "Review Application",
+                    systemImage: "person.badge.key"
+                ) {
+                    selectedRequest = request
+                    showReview = true
+                }
+                .disabled(viewModel.isLoading)
             }
-            .font(AppTypography.bodySmall)
-            .foregroundStyle(AppColors.textSecondary)
-
-            Button {
-                selectedRequest = request
-                showReview = true
-            } label: {
-                Text("Review Application")
-                    .font(AppTypography.bodyBold)
-                    .foregroundStyle(AppColors.accent)
-                    .frame(
-                        maxWidth: .infinity,
-                        minHeight: AppSpacing.minTouchTarget
-                    )
-                    .background(
-                        AppColors.buttonBackground,
-                        in: Capsule()
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(viewModel.isLoading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.medium)
-        .background(
-            AppColors.card,
-            in: RoundedRectangle(
-                cornerRadius: AppSpacing.radiusCard
-            )
-        )
     }
 }
