@@ -44,7 +44,7 @@ final class WardenPatrolViewModel {
                 selectedZoneId = zones.first?.id ?? ""
             }
         } catch {
-            errorMessage = "Could not load your assigned zones. Please refresh."
+            errorMessage = "Could not load your assigned zones. Try again."
         }
     }
 

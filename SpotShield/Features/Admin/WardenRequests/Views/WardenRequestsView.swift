@@ -26,7 +26,9 @@ struct WardenRequestsView: View {
                     AppMessageView(
                         title: "Could not load applications",
                         message: viewModel.errorMessage,
-                        appearance: .error
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadRequests() } }
                     )
                 }
 
@@ -52,14 +54,6 @@ struct WardenRequestsView: View {
                     }
                 }
 
-                AppButton(
-                    title: "Refresh",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoading
-                ) {
-                    Task { await viewModel.loadRequests() }
-                }
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 620, alignment: .leading)
@@ -71,9 +65,7 @@ struct WardenRequestsView: View {
         .tint(AppColors.textPrimary)
         .navigationTitle("Warden Applications")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.loadRequests()
-        }
+        .refreshOnAppearAndForeground { await viewModel.loadRequests() }
         .refreshable {
             await viewModel.loadRequests()
         }
@@ -109,25 +101,31 @@ struct WardenRequestsView: View {
 
     private func requestCard(request: WardenRequest) -> some View {
         AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                HStack(alignment: .top, spacing: AppSpacing.small) {
                     Text(request.name)
-                        .font(AppTypography.titleSmall)
+                        .font(AppTypography.titleMedium)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     AppStatusBadge(title: "Awaiting review", appearance: .warning)
                 }
 
-                Text(request.email)
+                Label(request.email, systemImage: "envelope")
                     .font(AppTypography.bodySmall)
                     .foregroundStyle(AppColors.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Label(
                     "Applied \(request.createdAt.formatted(date: .abbreviated, time: .omitted))",
                     systemImage: "calendar"
                 )
-                .font(AppTypography.caption)
+                .font(AppTypography.bodySmall)
                 .foregroundStyle(AppColors.textSecondary)
+                .padding(AppSpacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
 
                 AppButton(
                     title: "Review Application",

@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ParkingZonesView: View {
     @State private var viewModel = ParkingZonesViewModel()
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var showCreateZone = false
     @State private var selectedZone: ParkingZone?
@@ -28,7 +27,9 @@ struct ParkingZonesView: View {
                     AppMessageView(
                         title: "Could not update parking zones",
                         message: viewModel.errorMessage,
-                        appearance: .error
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadZones() } }
                     )
                 }
 
@@ -54,14 +55,6 @@ struct ParkingZonesView: View {
                     }
                 }
 
-                AppButton(
-                    title: "Refresh",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoading
-                ) {
-                    reloadZones()
-                }
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 760, alignment: .leading)
@@ -83,9 +76,7 @@ struct ParkingZonesView: View {
                 .disabled(viewModel.isLoading)
             }
         }
-        .task {
-            await viewModel.loadZones()
-        }
+        .refreshOnAppearAndForeground { await viewModel.loadZones() }
         .refreshable {
             await viewModel.loadZones()
         }
@@ -156,49 +147,46 @@ struct ParkingZonesView: View {
         let availableAssignments = viewModel.activeAssignments(zoneId: zone.id)
 
         return AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack(alignment: .top, spacing: AppSpacing.small) {
-                    if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: AppSpacing.small) {
-                            Text(zone.name)
-                                .font(AppTypography.titleSmall)
-
-                            zoneStatusBadge(zone: zone)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
+                    VStack(alignment: .leading, spacing: AppSpacing.small) {
                         Text(zone.name)
-                            .font(AppTypography.titleSmall)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
+                            .font(AppTypography.titleMedium)
+                            .fixedSize(horizontal: false, vertical: true)
                         zoneStatusBadge(zone: zone)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        selectedZone = zone
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(AppTypography.bodyBold)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: AppSpacing.minTouchTarget, height: AppSpacing.minTouchTarget)
+                            .background(AppColors.background, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit \(zone.name)")
+                    .disabled(viewModel.isLoading)
                 }
 
-                VStack(alignment: .leading, spacing: AppSpacing.small) {
-                    Label("LKR \(zone.hourlyRateLKR) per hour", systemImage: "banknote")
-                    Label(
-                        "\(zone.openingHour):00–\(zone.closingHour):00",
-                        systemImage: "clock"
-                    )
-                    Label(
-                        "Maximum stay: \(zone.maximumStayMinutes) minutes",
-                        systemImage: "timer"
-                    )
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xSmall) {
+                    Text("LKR \(zone.hourlyRateLKR.formatted())")
+                        .font(AppTypography.priceDisplay)
+                        .foregroundStyle(AppColors.accent)
+                    Text("per hour")
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.textLight.opacity(0.8))
                 }
-                .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textSecondary)
+                .padding(AppSpacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
 
-                Button {
-                    selectedZone = zone
-                } label: {
-                    managementButtonLabel(
-                        title: "Edit zone",
-                        systemImage: "pencil"
-                    )
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    zoneDetail("Opening hours", value: "\(zone.openingHour):00–\(zone.closingHour):00", systemImage: "clock")
+                    zoneDetail("Maximum stay", value: "\(zone.maximumStayMinutes) minutes", systemImage: "timer")
                 }
-                .buttonStyle(AppButtonStyle(appearance: .secondary))
-                .disabled(viewModel.isLoading)
 
                 if zone.isActive {
                     AppButton(
@@ -245,17 +233,25 @@ struct ParkingZonesView: View {
         zone.isPublished ? "Activate Zone" : "Publish Zone"
     }
 
-    private func managementButtonLabel(
-        title: String,
+    private func zoneDetail(
+        _ title: String,
+        value: String,
         systemImage: String
     ) -> some View {
-        HStack(spacing: AppSpacing.small) {
+        HStack(spacing: AppSpacing.medium) {
             Image(systemName: systemImage)
+                .foregroundStyle(AppColors.statusValid)
+                .frame(width: 24)
                 .accessibilityHidden(true)
-            Text(title)
+            VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                Text(title)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+                Text(value)
+                    .font(AppTypography.bodyBold)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: AppSpacing.minTouchTarget)
-        .contentShape(Capsule())
     }
 
     private func reloadZones() {

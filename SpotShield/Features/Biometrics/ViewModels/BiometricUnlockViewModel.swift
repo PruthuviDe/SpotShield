@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LocalAuthentication
 import Observation
 
 @MainActor
@@ -47,6 +48,10 @@ final class BiometricUnlockViewModel {
         do {
             try await biometricManager.authenticate(for: profile.id)
         } catch {
+            if isAuthenticationCancellation(error) {
+                return
+            }
+
             errorMessage = biometricManager.errorMessage(for: error)
         }
     }
@@ -81,5 +86,15 @@ final class BiometricUnlockViewModel {
         } else {
             errorMessage = "That password could not unlock this account. Try again."
         }
+    }
+
+    private func isAuthenticationCancellation(_ error: Error) -> Bool {
+        guard let authenticationError = error as? LAError else {
+            return false
+        }
+
+        return authenticationError.code == .userCancel
+            || authenticationError.code == .systemCancel
+            || authenticationError.code == .appCancel
     }
 }

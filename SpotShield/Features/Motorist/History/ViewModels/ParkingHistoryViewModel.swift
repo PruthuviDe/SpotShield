@@ -56,7 +56,7 @@ final class ParkingHistoryViewModel {
             }
 
             errorMessage =
-                "Could not load your parking history. Please try again."
+                "Could not load your parking history. Try again."
         }
     }
 }

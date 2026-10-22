@@ -42,8 +42,6 @@ final class WalletViewModel {
         }
 
         if clearMessages {
-            wallet = nil
-            transactions = []
             errorMessage = ""
             historyErrorMessage = ""
             successMessage = ""
@@ -101,7 +99,7 @@ final class WalletViewModel {
         } catch {
             guard !Task.isCancelled else { return }
 
-            historyErrorMessage = "Could not load your transactions. Please refresh."
+            historyErrorMessage = "Could not load your transactions. Try again."
         }
     }
 

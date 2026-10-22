@@ -158,7 +158,7 @@ final class WardenAssignmentsViewModel {
         do {
             assignments = try await assignmentRepository.getAssignments()
         } catch {
-            errorMessage = "The change was saved, but the list could not refresh. Tap Refresh."
+            errorMessage = "The change was saved, but the list could not update. Try again."
         }
     }
 }

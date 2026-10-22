@@ -124,6 +124,8 @@ final class ParkingSetupViewModel {
               hasLoadedActiveSession,
               activeSession == nil,
               !isBusy,
+              errorMessage.isEmpty,
+              walletErrorMessage.isEmpty,
               isParkedHere else {
             return false
         }
@@ -188,7 +190,6 @@ final class ParkingSetupViewModel {
             return
         }
 
-        vehicle = nil
         errorMessage = ""
 
         guard profile.role == .motorist else {
@@ -329,7 +330,6 @@ final class ParkingSetupViewModel {
     func loadWalletBalance() async {
         guard !isLoadingWallet, !Task.isCancelled else { return }
         isLoadingWallet = true
-        walletBalanceLKR = nil
         walletErrorMessage = ""
         defer { isLoadingWallet = false }
         do {
@@ -571,7 +571,13 @@ final class ParkingSetupViewModel {
                 return
             }
 
-            activeSession = nil
+            var updatedSession = session
+            updatedSession.durationMinutes += minutes
+            updatedSession.paidUntil = session.paidUntil.addingTimeInterval(
+                TimeInterval(minutes * 60)
+            )
+            updatedSession.totalPaidLKR += amountLKR
+            activeSession = updatedSession
             selectedExtensionMinutes = 0
             pendingRequestKey = ""
             pendingOperationId = ""

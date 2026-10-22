@@ -11,24 +11,35 @@ struct AppMessageView: View {
     let title: String
     var message: String? = nil
     var appearance: AppStatusAppearance = .neutral
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppSpacing.small) {
-            Image(systemName: appearance.systemImage)
-                .font(AppTypography.bodyBold)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
-                Text(title)
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            HStack(alignment: .top, spacing: AppSpacing.small) {
+                Image(systemName: appearance.systemImage)
                     .font(AppTypography.bodyBold)
+                    .accessibilityHidden(true)
 
-                if let message {
-                    Text(message)
-                        .font(AppTypography.bodySmall)
+                VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                    Text(title)
+                        .font(AppTypography.bodyBold)
+
+                    if let message {
+                        Text(message)
+                            .font(AppTypography.bodySmall)
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let actionTitle, let action {
+                Button(actionTitle, systemImage: "arrow.clockwise", action: action)
+                    .font(AppTypography.bodyBold)
+                    .foregroundStyle(appearance.foreground)
+                    .frame(minHeight: AppSpacing.minTouchTarget, alignment: .leading)
+            }
         }
         .foregroundStyle(appearance.foreground)
         .padding(AppSpacing.medium)
@@ -36,7 +47,7 @@ struct AppMessageView: View {
             appearance.background,
             in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
     }
 }
 

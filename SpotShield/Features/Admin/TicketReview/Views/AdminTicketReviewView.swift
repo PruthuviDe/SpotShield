@@ -31,7 +31,9 @@ struct AdminTicketReviewView: View {
                     AppMessageView(
                         title: "Could not load observations",
                         message: viewModel.errorMessage,
-                        appearance: .error
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadObservations() } }
                     )
                 }
 
@@ -66,15 +68,6 @@ struct AdminTicketReviewView: View {
                     }
                 }
 
-                AppButton(
-                    title: "Refresh",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoading
-                ) {
-                    Task { await viewModel.loadObservations() }
-                }
-                .disabled(viewModel.isLoading || !viewModel.reviewingId.isEmpty)
             }
             .frame(maxWidth: 700, alignment: .leading)
             .padding(AppSpacing.large)
@@ -86,8 +79,9 @@ struct AdminTicketReviewView: View {
         .tint(AppColors.textPrimary)
         .navigationTitle("Review Observations")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: viewModel.showReviewed) {
-            await viewModel.loadObservations()
+        .refreshOnAppearAndForeground { await viewModel.loadObservations() }
+        .onChange(of: viewModel.showReviewed) { _, _ in
+            Task { await viewModel.loadObservations() }
         }
         .refreshable {
             await viewModel.loadObservations()
@@ -99,21 +93,27 @@ struct AdminTicketReviewView: View {
 
     private func observationCard(_ observation: WardenObservation) -> some View {
         AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack(alignment: .top, spacing: AppSpacing.small) {
-                    Text(observation.zoneName)
-                        .font(AppTypography.titleSmall)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
                     AppStatusBadge(
                         title: observation.reviewStatus.rawValue,
                         appearance: reviewAppearance(observation.reviewStatus)
                     )
+                    Spacer(minLength: AppSpacing.small)
+                    Text(observation.observedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.trailing)
                 }
 
-                Text(observation.licensePlate)
-                    .font(AppTypography.titleMedium)
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    Text(observation.zoneName)
+                        .font(AppTypography.titleSmall)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label(observation.licensePlate, systemImage: "car")
+                        .font(AppTypography.titleMedium)
+                        .textSelection(.enabled)
+                }
 
                 AppStatusBadge(
                     title: observation.parkingStatus,
@@ -126,13 +126,6 @@ struct AdminTicketReviewView: View {
                         .foregroundStyle(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Label(
-                    "Observed \(observation.observedAt.formatted(date: .abbreviated, time: .shortened))",
-                    systemImage: "clock"
-                )
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
 
                 if let reason = observation.decisionReason, !reason.isEmpty {
                     LabeledContent("Decision reason", value: reason)

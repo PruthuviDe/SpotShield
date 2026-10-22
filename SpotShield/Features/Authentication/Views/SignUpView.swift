@@ -15,26 +15,37 @@ struct SignUpView: View {
     private enum Field { case name, email, password, confirmation, plate }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.large) {
-                AuthenticationHeaderView(
-                    title: "Create your account",
-                    message: "Your next parking session starts here."
-                )
-                fields
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    Spacer(minLength: 0)
+                    AuthenticationHeaderView(
+                        title: "Create your account",
+                        message: "Your next parking session starts here."
+                    )
+                    AppCard {
+                        fields
+                    }
 
-                if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
-                }
+                    if !viewModel.errorMessage.isEmpty {
+                        AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    }
 
-                AppButton(title: viewModel.isLoading ? "Creating account…" : "Create Driver Account", isLoading: viewModel.isLoading) {
-                    focusedField = nil
-                    Task { await viewModel.createAccount(appState: appState) }
+                    AppButton(title: viewModel.isLoading ? "Creating account…" : "Create Driver Account", isLoading: viewModel.isLoading) {
+                        focusedField = nil
+                        Task { await viewModel.createAccount(appState: appState) }
+                    }
+                    .disabled(viewModel.isLoading)
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, AppSpacing.large)
+                .padding(.vertical, AppSpacing.small)
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: geometry.size.height)
             }
-            .padding(AppSpacing.large)
-            .frame(maxWidth: 480)
-            .frame(maxWidth: .infinity)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .background(AppColors.background.ignoresSafeArea())
         .foregroundStyle(AppColors.textPrimary)
@@ -46,7 +57,9 @@ struct SignUpView: View {
     }
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+        VStack(alignment: .leading, spacing: AppSpacing.small) {
+            AppSectionHeader(title: "Account details")
+
             VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
                 Text("Full name").font(AppTypography.bodyBold)
                 TextField(
@@ -110,7 +123,11 @@ struct SignUpView: View {
                     .onSubmit { focusedField = .plate }
             }
 
+            Divider()
+                .padding(.vertical, AppSpacing.xSmall)
+
             VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                Text("Vehicle").font(AppTypography.titleSmall)
                 Text("License plate (optional)").font(AppTypography.bodyBold)
                 TextField(
                     "License plate",

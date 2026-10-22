@@ -23,81 +23,83 @@ struct BiometricUnlockView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppSpacing.large) {
-                Image(systemName: viewModel.biometricIcon)
-                    .font(.system(size: 56))
-                    .foregroundStyle(AppColors.accent)
-                    .accessibilityHidden(true)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: AppSpacing.medium) {
+                    Spacer(minLength: 0)
+                    AuthenticationHeaderView(
+                        title: "Welcome back, \(viewModel.profile.name)",
+                        message: unlockDescription
+                    )
 
-                Text("Unlock SpotShield")
-                    .font(AppTypography.titleLarge)
-                    .multilineTextAlignment(.center)
+                    if !viewModel.errorMessage.isEmpty {
+                        AppMessageView(
+                            title: viewModel.errorMessage,
+                            appearance: .error
+                        )
+                    }
 
-                Text(unlockDescription)
-                    .font(AppTypography.bodyMedium)
+                    if viewModel.isBiometricAvailable {
+                        AppButton(
+                            title: viewModel.isCheckingBiometrics
+                                ? "Authenticating…"
+                                : "Unlock with \(viewModel.biometricDeviceName)",
+                            systemImage: viewModel.biometricIcon,
+                            isLoading: viewModel.isCheckingBiometrics
+                        ) {
+                            Task { await viewModel.unlockWithBiometrics() }
+                        }
+                    }
+
+                    if viewModel.isShowingPasswordField {
+                        SecureField(
+                            "Account password",
+                            text: $viewModel.password,
+                            prompt: Text("Enter your account password")
+                        )
+                        .textContentType(.password)
+                        .accessibilityLabel("Account password")
+                        .textFieldStyle(AppTextFieldStyle())
+                        .focused($isPasswordFieldFocused)
+                        .submitLabel(.go)
+                        .onAppear {
+                            isPasswordFieldFocused = true
+                        }
+                        .onSubmit {
+                            Task { await unlockWithPassword() }
+                        }
+
+                        AppButton(
+                            title: "Continue",
+                            isLoading: viewModel.isCheckingPassword
+                        ) {
+                            Task { await unlockWithPassword() }
+                        }
+                    } else {
+                        Button("Use account password") {
+                            viewModel.showPasswordEntry()
+                        }
+                        .font(AppTypography.bodyBold)
+                        .frame(minHeight: AppSpacing.minTouchTarget)
+                    }
+
+                    Button("Use another account") {
+                        appState.signOut()
+                    }
+                    .font(AppTypography.bodySmall)
                     .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
-
-                if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(
-                        title: viewModel.errorMessage,
-                        appearance: .error
-                    )
-                }
-
-                if viewModel.isBiometricAvailable {
-                    AppButton(
-                        title: viewModel.isCheckingBiometrics
-                            ? "Authenticating…"
-                            : "Unlock with \(viewModel.biometricDeviceName)",
-                        systemImage: viewModel.biometricIcon,
-                        isLoading: viewModel.isCheckingBiometrics
-                    ) {
-                        Task { await viewModel.unlockWithBiometrics() }
-                    }
-                } else {
-                    AppMessageView(
-                        title: "Biometric unlock is unavailable. Continue with your account password.",
-                        appearance: .neutral
-                    )
-                }
-
-                if viewModel.isShowingPasswordField {
-                    SecureField(
-                        "Account password",
-                        text: $viewModel.password,
-                        prompt: Text("Enter your account password")
-                    )
-                    .textContentType(.password)
-                    .accessibilityLabel("Account password")
-                    .textFieldStyle(AppTextFieldStyle())
-                    .focused($isPasswordFieldFocused)
-                    .submitLabel(.go)
-                    .onAppear {
-                        isPasswordFieldFocused = true
-                    }
-                    .onSubmit {
-                        Task { await unlockWithPassword() }
-                    }
-
-                    AppButton(
-                        title: "Continue",
-                        isLoading: viewModel.isCheckingPassword
-                    ) {
-                        Task { await unlockWithPassword() }
-                    }
-                } else {
-                    Button("Use account password") {
-                        viewModel.showPasswordEntry()
-                    }
-                    .font(AppTypography.bodyBold)
                     .frame(minHeight: AppSpacing.minTouchTarget)
+                    .disabled(viewModel.isCheckingPassword || viewModel.isCheckingBiometrics)
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, AppSpacing.large)
+                .padding(.vertical, AppSpacing.small)
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: geometry.size.height)
             }
-            .padding(AppSpacing.large)
-            .frame(maxWidth: 480)
-            .frame(maxWidth: .infinity, minHeight: 420)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .foregroundStyle(AppColors.textPrimary)
         .background(AppColors.background.ignoresSafeArea())
@@ -125,9 +127,9 @@ struct BiometricUnlockView: View {
 
     private var unlockDescription: String {
         if viewModel.isBiometricAvailable {
-            return "Use \(viewModel.biometricDeviceName) or your account password to continue as \(viewModel.profile.name)."
+            return "Unlock with \(viewModel.biometricDeviceName) or your account password."
         }
 
-        return "Enter your account password to continue as \(viewModel.profile.name)."
+        return "Enter your account password to continue."
     }
 }

@@ -26,7 +26,7 @@ final class MotoristTicketsViewModel {
         do {
             tickets = try await repository.getMyTickets()
         } catch {
-            errorMessage = "Could not load your tickets. Please refresh."
+            errorMessage = "Could not load your tickets. Try again."
         }
     }
 

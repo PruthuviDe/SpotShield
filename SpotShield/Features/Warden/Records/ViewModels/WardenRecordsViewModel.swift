@@ -28,7 +28,7 @@ final class WardenRecordsViewModel {
         do {
             observations = try await repository.getWardenObservations()
         } catch {
-            errorMessage = "Could not load your observations. Please refresh."
+            errorMessage = "Could not load your observations. Try again."
         }
     }
 }

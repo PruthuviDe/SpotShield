@@ -32,7 +32,6 @@ final class AdminOverviewViewModel {
         guard !isLoading else { return }
 
         errorMessage = ""
-        lastUpdated = nil
 
         guard profile.role == .admin else {
             errorMessage = "This overview is available to Admin accounts only."

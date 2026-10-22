@@ -33,8 +33,7 @@ final class MotoristHomeViewModel {
             )
         } catch {
             guard !Task.isCancelled else { return }
-            session = nil
-            errorMessage = "Could not load your parking. Refresh to try again."
+            errorMessage = "Could not load your parking. Try again."
         }
     }
 }

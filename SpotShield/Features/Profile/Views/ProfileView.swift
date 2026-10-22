@@ -11,7 +11,6 @@ import UIKit
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openURL) private var openURL
-    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: ProfileViewModel
     @State private var isShowingSignOutConfirmation = false
     private let onOpenWallet: (() -> Void)?
@@ -35,8 +34,7 @@ struct ProfileView: View {
                     assignmentSection
                 }
 
-                notificationsSection
-                biometricSection
+                settingsSection
 
                 AppButton(
                     title: "Sign Out",
@@ -56,27 +54,18 @@ struct ProfileView: View {
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Profile & Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.load()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                Task {
-                    await viewModel.refreshNotificationStatus()
-                }
-            }
-        }
-        .confirmationDialog(
+        .refreshOnAppearAndForeground { await viewModel.load() }
+        .refreshable { await viewModel.load() }
+        .alert(
             "Sign out of SpotShield?",
             isPresented: $isShowingSignOutConfirmation,
-            titleVisibility: .visible
         ) {
             Button("Sign Out", role: .destructive) {
                 appState.signOut()
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("You will need to sign in again to access your account.")
+            Text("You can sign in again at any time.")
         }
     }
 
@@ -101,7 +90,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: AppSpacing.medium) {
                 AppSectionHeader(title: "Vehicle")
 
-                if viewModel.isLoadingVehicle {
+                if viewModel.isLoadingVehicle && viewModel.vehicle == nil {
                     AppLoadingView(title: "Loading vehicle details…")
                 } else if let vehicle = viewModel.vehicle {
                     Label(vehicle.licensePlate, systemImage: "car")
@@ -115,6 +104,25 @@ struct ProfileView: View {
                             .font(AppTypography.bodySmall)
                             .foregroundStyle(AppColors.textSecondary)
                     }
+                    if viewModel.isLoadingVehicle {
+                        ProgressView("Updating vehicle details…")
+                            .font(AppTypography.caption)
+                    }
+                    if !viewModel.vehicleError.isEmpty {
+                        AppMessageView(
+                            title: viewModel.vehicleError,
+                            appearance: .error,
+                            actionTitle: "Try Again",
+                            action: { Task { await viewModel.loadVehicle() } }
+                        )
+                    }
+                } else if !viewModel.vehicleError.isEmpty {
+                    AppMessageView(
+                        title: viewModel.vehicleError,
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadVehicle() } }
+                    )
                 } else {
                     AppMessageView(
                         title: viewModel.vehicleMessage,
@@ -150,130 +158,133 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: AppSpacing.medium) {
                 AppSectionHeader(title: "Assigned patrol zones")
 
-                if viewModel.isLoadingZones {
+                if viewModel.isLoadingZones && viewModel.assignedZones.isEmpty {
                     AppLoadingView(title: "Loading assigned zones…")
-                } else if !viewModel.assignmentError.isEmpty {
+                }
+                if !viewModel.assignmentError.isEmpty {
                     AppMessageView(
                         title: viewModel.assignmentError,
-                        appearance: .error
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadAssignedZones() } }
                     )
-                } else if viewModel.assignedZones.isEmpty {
+                }
+                if !viewModel.assignedZones.isEmpty {
+                    if viewModel.isLoadingZones {
+                        ProgressView("Updating assigned zones…")
+                            .font(AppTypography.caption)
+                    }
+                    ForEach(viewModel.assignedZones) { zone in
+                        Label(zone.name, systemImage: "mappin.and.ellipse")
+                            .font(AppTypography.bodyBold)
+                    }
+                } else if !viewModel.isLoadingZones && viewModel.assignmentError.isEmpty {
                     AppMessageView(
                         title: "No patrol zones assigned",
                         message: "Your active patrol assignments will appear here.",
                         appearance: .neutral
                     )
-                } else {
-                    ForEach(viewModel.assignedZones) { zone in
-                        Label(zone.name, systemImage: "mappin.and.ellipse")
-                            .font(AppTypography.bodyBold)
-                    }
                 }
+            }
+        }
+    }
 
-                AppButton(
-                    title: "Refresh assignments",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoadingZones
-                ) {
+    private var settingsSection: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                notificationsContent
+                Divider()
+                biometricContent
+            }
+        }
+    }
+
+    private var notificationsContent: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            AppSectionHeader(
+                title: viewModel.profile.role == .motorist
+                    ? "Parking reminders"
+                    : "Notifications"
+            )
+
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Text("Notification access")
+                        .foregroundStyle(AppColors.textSecondary)
+                    Spacer(minLength: AppSpacing.small)
+                    notificationBadge
+                }
+                VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                    Text("Notification access")
+                        .foregroundStyle(AppColors.textSecondary)
+                    notificationBadge
+                }
+            }
+
+            if !viewModel.notificationError.isEmpty {
+                AppMessageView(
+                    title: viewModel.notificationError,
+                    appearance: .error
+                )
+            }
+
+            AppButton(
+                title: notificationButtonTitle,
+                systemImage: notificationButtonImage,
+                appearance: .secondary,
+                isLoading: viewModel.isRequestingNotifications
+            ) {
+                if viewModel.notificationStatus == "Not requested" {
                     Task {
-                        await viewModel.loadAssignedZones()
+                        await viewModel.requestNotifications()
                     }
-                }
-            }
-        }
-    }
-
-    private var notificationsSection: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                AppSectionHeader(
-                    title: viewModel.profile.role == .motorist
-                        ? "Parking reminders"
-                        : "Notifications"
-                )
-
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Text("Notification access")
-                            .foregroundStyle(AppColors.textSecondary)
-                        Spacer(minLength: AppSpacing.small)
-                        notificationBadge
-                    }
-                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
-                        Text("Notification access")
-                            .foregroundStyle(AppColors.textSecondary)
-                        notificationBadge
-                    }
-                }
-
-                if !viewModel.notificationError.isEmpty {
-                    AppMessageView(
-                        title: viewModel.notificationError,
-                        appearance: .error
-                    )
-                }
-
-                AppButton(
-                    title: notificationButtonTitle,
-                    systemImage: notificationButtonImage,
-                    appearance: .secondary,
-                    isLoading: viewModel.isRequestingNotifications
+                } else if let settingsURL = URL(
+                    string: UIApplication.openSettingsURLString
                 ) {
-                    if viewModel.notificationStatus == "Not requested" {
-                        Task {
-                            await viewModel.requestNotifications()
-                        }
-                    } else if let settingsURL = URL(
-                        string: UIApplication.openSettingsURLString
-                    ) {
-                        openURL(settingsURL)
-                    }
+                    openURL(settingsURL)
                 }
-                .disabled(viewModel.notificationStatus == "Checking...")
             }
+            .disabled(viewModel.notificationStatus == "Checking...")
         }
     }
 
-    private var biometricSection: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                AppSectionHeader(title: "Secure access")
+    private var biometricContent: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            AppSectionHeader(title: "Secure access")
 
-                Toggle(
-                    "Use \(viewModel.biometricDeviceName)",
-                    isOn: Binding(
-                        get: { viewModel.isBiometricEnabled },
-                        set: { isEnabled in
-                            Task {
-                                await viewModel.setBiometricEnabled(isEnabled)
-                            }
+            Toggle(
+                "Use \(viewModel.biometricDeviceName)",
+                isOn: Binding(
+                    get: { viewModel.isBiometricEnabled },
+                    set: { isEnabled in
+                        Task {
+                            await viewModel.setBiometricEnabled(isEnabled)
                         }
-                    )
+                    }
                 )
-                .tint(AppColors.accent)
-                .disabled(
-                    viewModel.isUpdatingBiometric
-                        || (!viewModel.isBiometricAvailable && !viewModel.isBiometricEnabled)
+            )
+            .tint(AppColors.accent)
+            .disabled(
+                viewModel.isUpdatingBiometric
+                    || (!viewModel.isBiometricAvailable && !viewModel.isBiometricEnabled)
+            )
+
+            Text("Require biometric authentication when you return to SpotShield.")
+                .font(AppTypography.bodySmall)
+                .foregroundStyle(AppColors.textSecondary)
+
+            if !viewModel.isBiometricAvailable {
+                AppMessageView(
+                    title: "Set up Face ID or Touch ID on this device to enable secure access.",
+                    appearance: .neutral
                 )
+            }
 
-                Text("Require biometric authentication when you return to SpotShield.")
-                    .font(AppTypography.bodySmall)
-                    .foregroundStyle(AppColors.textSecondary)
-
-                if !viewModel.isBiometricAvailable {
-                    AppMessageView(
-                        title: "Set up Face ID or Touch ID on this device to enable secure access.",
-                        appearance: .neutral
-                    )
-                }
-
-                if !viewModel.biometricError.isEmpty {
-                    AppMessageView(
-                        title: viewModel.biometricError,
-                        appearance: .error
-                    )
-                }
+            if !viewModel.biometricError.isEmpty {
+                AppMessageView(
+                    title: viewModel.biometricError,
+                    appearance: .error
+                )
             }
         }
     }

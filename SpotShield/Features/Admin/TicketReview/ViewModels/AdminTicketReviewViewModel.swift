@@ -45,7 +45,7 @@ final class AdminTicketReviewViewModel {
                 observations = try await repository.getPendingObservations()
             }
         } catch {
-            errorMessage = "Could not load observations. Please refresh."
+            errorMessage = "Could not load observations. Try again."
         }
     }
 
@@ -62,6 +62,8 @@ final class AdminTicketReviewViewModel {
     }
 
     func loadReview(id: String) async {
+        guard !isCheckingReview else { return }
+
         isCheckingReview = true
         defer { isCheckingReview = false }
         do {

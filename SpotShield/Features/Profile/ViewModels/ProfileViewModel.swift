@@ -20,12 +20,14 @@ final class ProfileViewModel {
 
     var vehicle: Vehicle?
     var vehicleMessage = ""
+    var vehicleError = ""
     var isLoadingVehicle = false
     var assignedZones: [WardenPatrolZone] = []
     var isLoadingZones = false
     var assignmentError = ""
     var notificationStatus = "Checking..."
     var notificationError = ""
+    var isRefreshingNotificationStatus = false
     var isRequestingNotifications = false
     var isBiometricEnabled = false
     var biometricDeviceName = "Biometric unlock"
@@ -87,10 +89,12 @@ final class ProfileViewModel {
         guard let vehicleId = profile.primaryVehicleId else {
             vehicle = nil
             vehicleMessage = "No vehicle is linked to this account."
+            vehicleError = ""
             return
         }
 
         isLoadingVehicle = true
+        vehicleError = ""
         defer { isLoadingVehicle = false }
 
         do {
@@ -105,10 +109,12 @@ final class ProfileViewModel {
                 vehicleMessage = ""
             } else {
                 vehicleMessage = "Vehicle details could not be found."
+                vehicleError = vehicleMessage
             }
         } catch {
             guard !Task.isCancelled else { return }
             vehicleMessage = "Could not load vehicle details."
+            vehicleError = vehicleMessage
         }
     }
 
@@ -117,7 +123,6 @@ final class ProfileViewModel {
 
         isLoadingZones = true
         assignmentError = ""
-        assignedZones = []
         defer { isLoadingZones = false }
 
         do {
@@ -126,11 +131,15 @@ final class ProfileViewModel {
             assignedZones = zones.sorted { $0.name < $1.name }
         } catch {
             guard !Task.isCancelled else { return }
-            assignmentError = "Could not load your assigned zones. Please refresh."
+            assignmentError = "Could not load your assigned zones. Try again."
         }
     }
 
     func refreshNotificationStatus() async {
+        guard !isRefreshingNotificationStatus else { return }
+
+        isRefreshingNotificationStatus = true
+        defer { isRefreshingNotificationStatus = false }
         notificationStatus = "Checking..."
         let settings = await notificationCenter.notificationSettings()
         guard !Task.isCancelled else { return }

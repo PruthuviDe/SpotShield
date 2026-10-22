@@ -15,21 +15,29 @@ struct MotoristTicketsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: AppSpacing.large) {
                 AppSectionHeader(title: "Your tickets", subtitle: "Review issued tickets and track wallet payments.")
-                if viewModel.isLoading {
+                if viewModel.isLoading && viewModel.tickets.isEmpty {
                     AppLoadingView(title: "Loading tickets…")
-                } else if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
-                } else if viewModel.tickets.isEmpty {
+                }
+                if !viewModel.errorMessage.isEmpty {
+                    AppMessageView(
+                        title: viewModel.errorMessage,
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadTickets() } }
+                    )
+                }
+                if !viewModel.isLoading && viewModel.tickets.isEmpty && viewModel.errorMessage.isEmpty {
                     AppEmptyStateView(title: "No tickets to show", message: "Any tickets issued to your vehicle will appear here.", systemImage: "doc.text")
-                } else {
+                }
+                if !viewModel.tickets.isEmpty {
+                    if viewModel.isLoading {
+                        ProgressView("Updating tickets…")
+                            .font(AppTypography.bodySmall)
+                    }
                     ForEach(viewModel.tickets) { ticket in
                         ticketCard(ticket)
                     }
                 }
-                AppButton(title: "Refresh Tickets", systemImage: "arrow.clockwise", appearance: .secondary) {
-                    Task { await viewModel.loadTickets() }
-                }
-                .disabled(viewModel.isLoading || viewModel.payingTicketId != nil)
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 720, alignment: .leading)
@@ -39,7 +47,7 @@ struct MotoristTicketsView: View {
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Tickets")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.loadTickets() }
+        .refreshOnAppearAndForeground { await viewModel.loadTickets() }
         .refreshable { await viewModel.loadTickets() }
         .confirmationDialog(
             "Pay LKR \(ticketToConfirm?.fineAmountLKR.formatted() ?? "0") from your wallet?",
@@ -63,19 +71,65 @@ struct MotoristTicketsView: View {
 
     private func ticketCard(_ ticket: SimulatedTicket) -> some View {
         AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                AppStatusBadge(title: ticket.paymentStatus.rawValue, appearance: ticket.paymentStatus == .paid ? .success : .warning)
-                Text(ticket.zoneName).font(AppTypography.titleMedium)
-                Label(ticket.licensePlate, systemImage: "car").font(AppTypography.bodyBold)
-                Text("LKR \(ticket.fineAmountLKR.formatted())").font(AppTypography.priceDisplay)
-                Text(ticket.reason)
-                Text(ticket.issuedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-                Text("Ticket ID: \(ticket.id)")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-                    .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                HStack(alignment: .top) {
+                    AppStatusBadge(title: ticket.paymentStatus.rawValue, appearance: ticketStatusAppearance(ticket.paymentStatus))
+                    Spacer(minLength: AppSpacing.small)
+                    Text(ticket.issuedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.trailing)
+                }
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    Text(ticket.zoneName)
+                        .font(AppTypography.titleMedium)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label(ticket.licensePlate, systemImage: "car")
+                        .font(AppTypography.bodyBold)
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    Text("Reason")
+                        .font(AppTypography.captionBold)
+                        .foregroundStyle(AppColors.textSecondary)
+                    Text(ticket.reason)
+                        .font(AppTypography.bodyMedium)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Fine amount")
+                            .font(AppTypography.bodyBold)
+                            .foregroundStyle(AppColors.textLight)
+                        Spacer(minLength: AppSpacing.small)
+                        Text("LKR \(ticket.fineAmountLKR.formatted())")
+                            .font(AppTypography.priceDisplay)
+                            .foregroundStyle(AppColors.accent)
+                            .fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                        Text("Fine amount")
+                            .font(AppTypography.bodyBold)
+                            .foregroundStyle(AppColors.textLight)
+                        Text("LKR \(ticket.fineAmountLKR.formatted())")
+                            .font(AppTypography.priceDisplay)
+                            .foregroundStyle(AppColors.accent)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(AppSpacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
+                VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                    Text("Ticket ID")
+                        .font(AppTypography.captionBold)
+                        .foregroundStyle(AppColors.textSecondary)
+                    Text(ticket.id)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let message = ticket.paymentMessage, !message.isEmpty {
                     Text(message.replacingOccurrences(of: "demo wallet", with: "wallet"))
                         .font(AppTypography.bodySmall)
@@ -95,6 +149,14 @@ struct MotoristTicketsView: View {
                     AppMessageView(title: message, appearance: .error)
                 }
             }
+        }
+    }
+
+    private func ticketStatusAppearance(_ status: TicketStatus) -> AppStatusAppearance {
+        switch status {
+        case .paid: .success
+        case .due: .warning
+        case .pending: .neutral
         }
     }
 }

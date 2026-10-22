@@ -13,6 +13,9 @@ struct ParkingSetupView: View {
     @State private var viewModel: ParkingSetupViewModel
     @State private var isShowingEndConfirmation = false
     @State private var sessionToEndId = ""
+    @State private var actionFeedbackTitle = ""
+    @State private var actionFeedbackMessage = ""
+    @State private var isShowingActionFeedback = false
 
     init(zone: ParkingZone, profile: UserProfile) {
         self.zone = zone
@@ -27,90 +30,111 @@ struct ParkingSetupView: View {
     }
 
     var body: some View {
-        ScrollViewReader { scroll in
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.large) {
-                    if let name = viewModel.activeSession?.zoneName ?? zone?.name {
-                        Text(name).font(AppTypography.titleMedium).accessibilityAddTraits(.isHeader)
-                    }
-                    if viewModel.isLoading || viewModel.isLoadingSession {
-                        AppLoadingView(title: "Checking your parking details…")
-                    }
-                    feedback.id("parking-feedback")
-                    if let session = viewModel.activeSession {
-                        activeSessionDetails(session)
-                    } else if let zone, let vehicle = viewModel.vehicle,
-                              !viewModel.isLoadingSession, viewModel.sessionErrorMessage.isEmpty {
-                        vehicleDetails(vehicle)
-                        parkingDetails(zone)
-                    } else if zone == nil, !viewModel.isLoadingSession, viewModel.sessionErrorMessage.isEmpty {
-                        AppEmptyStateView(title: "No active parking", message: "Your completed sessions are available in History.", systemImage: "parkingsign.circle")
-                    }
-                    if profile.primaryVehicleId == nil, zone != nil {
-                        NavigationLink {
-                            DriverSetupView(profile: profile)
-                        } label: {
-                            Label("Add Vehicle", systemImage: "car")
-                        }
-                        .buttonStyle(AppButtonStyle())
-                    }
-                    AppButton(title: "Refresh Details", systemImage: "arrow.clockwise", appearance: .secondary) {
-                        Task { await loadScreen() }
-                    }
-                    .disabled(viewModel.isBusy)
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                if let name = viewModel.activeSession?.zoneName ?? zone?.name {
+                    Text(name).font(AppTypography.titleMedium).accessibilityAddTraits(.isHeader)
                 }
-                .padding(AppSpacing.large)
-                .frame(maxWidth: 720, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
-            .font(AppTypography.bodyMedium)
-            .foregroundStyle(AppColors.textPrimary)
-            .background(AppColors.background.ignoresSafeArea())
-            .tint(AppColors.textPrimary)
-            .navigationTitle(zone == nil ? "Manage Parking" : "Parking Setup")
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await loadScreen() }
-            .onChange(of: viewModel.parkingErrorMessage) { _, message in
-                if !message.isEmpty { scroll.scrollTo("parking-feedback", anchor: .top) }
-            }
-            .onChange(of: viewModel.successMessage) { _, message in
-                if !message.isEmpty { scroll.scrollTo("parking-feedback", anchor: .top) }
-            }
-            .confirmationDialog("End parking?", isPresented: $isShowingEndConfirmation, titleVisibility: .visible) {
-                Button("End Parking", role: .destructive) {
-                    Task {
-                        guard viewModel.activeSession?.id == sessionToEndId else {
-                            viewModel.parkingErrorMessage = "Your parking session changed. Refresh and check it before ending."
-                            return
-                        }
-                        await viewModel.endParking()
-                    }
+                if (viewModel.isLoading || viewModel.isLoadingSession)
+                    && viewModel.activeSession == nil {
+                    AppLoadingView(title: "Checking your parking details…")
                 }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("Unused parking time will not be refunded.")
+                feedback
+                if let session = viewModel.activeSession {
+                    activeSessionDetails(session)
+                } else if let zone, let vehicle = viewModel.vehicle {
+                    vehicleDetails(vehicle)
+                    parkingDetails(zone)
+                } else if zone == nil, !viewModel.isLoadingSession, viewModel.sessionErrorMessage.isEmpty {
+                    AppEmptyStateView(title: "No active parking", message: "Your completed sessions are available in History.", systemImage: "parkingsign.circle")
+                }
+                if profile.primaryVehicleId == nil, zone != nil {
+                    NavigationLink {
+                        DriverSetupView(profile: profile)
+                    } label: {
+                        Label("Add Vehicle", systemImage: "car")
+                    }
+                    .buttonStyle(AppButtonStyle())
+                }
             }
+            .padding(AppSpacing.large)
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .font(AppTypography.bodyMedium)
+        .foregroundStyle(AppColors.textPrimary)
+        .background(AppColors.background.ignoresSafeArea())
+        .tint(AppColors.textPrimary)
+        .navigationTitle(zone == nil ? "Manage Parking" : "Parking Setup")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadScreen() }
+                } label: {
+                    Label("Refresh parking details", systemImage: "arrow.clockwise")
+                }
+                .disabled(viewModel.isBusy)
+            }
+        }
+        .task { await loadScreen() }
+        .refreshable { await loadScreen() }
+        .onChange(of: viewModel.parkingErrorMessage) { _, message in
+            showActionFeedback(message, title: "Parking issue")
+        }
+        .onChange(of: viewModel.sessionErrorMessage) { _, message in
+            guard viewModel.activeSession != nil else { return }
+            showActionFeedback(message, title: "Could not refresh parking")
+        }
+        .onChange(of: viewModel.successMessage) { _, message in
+            showActionFeedback(message, title: "Parking updated")
+        }
+        .alert(actionFeedbackTitle, isPresented: $isShowingActionFeedback) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(actionFeedbackMessage)
+        }
+        .confirmationDialog("End parking?", isPresented: $isShowingEndConfirmation, titleVisibility: .visible) {
+            Button("End Parking", role: .destructive) {
+                Task {
+                    guard viewModel.activeSession?.id == sessionToEndId else {
+                        viewModel.parkingErrorMessage = "Your parking session changed. Refresh and check it before ending."
+                        return
+                    }
+                    await viewModel.endParking()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Unused parking time will not be refunded.")
         }
     }
 
     private var feedback: some View {
         VStack(spacing: AppSpacing.medium) {
             if !viewModel.errorMessage.isEmpty {
-                AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                AppMessageView(
+                    title: viewModel.errorMessage,
+                    appearance: .error,
+                    actionTitle: "Try Again",
+                    action: { Task { await viewModel.loadVehicle() } }
+                )
             }
-            if !viewModel.sessionErrorMessage.isEmpty {
+            if !viewModel.sessionErrorMessage.isEmpty,
+               viewModel.activeSession == nil {
                 AppMessageView(title: viewModel.sessionErrorMessage, appearance: .error)
-            }
-            if !viewModel.parkingErrorMessage.isEmpty {
-                AppMessageView(title: viewModel.parkingErrorMessage, appearance: .error)
             }
             if !viewModel.notificationMessage.isEmpty {
                 AppMessageView(title: "Parking reminder unavailable", message: viewModel.notificationMessage, appearance: .warning)
             }
-            if !viewModel.successMessage.isEmpty {
-                AppMessageView(title: viewModel.successMessage, appearance: .success)
-            }
         }
+    }
+
+    private func showActionFeedback(_ message: String, title: String) {
+        guard !message.isEmpty else { return }
+        actionFeedbackTitle = title
+        actionFeedbackMessage = message
+        isShowingActionFeedback = true
     }
 
     private func loadScreen() async {
@@ -137,11 +161,19 @@ struct ParkingSetupView: View {
     }
 
     private func parkingDetails(_ zone: ParkingZone) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { clock in
+        TimelineView(.periodic(from: .now, by: 60)) { clock in
             let durations = viewModel.availableDurations(zone: zone, at: clock.date)
             AppCard {
                 VStack(alignment: .leading, spacing: AppSpacing.medium) {
                     AppSectionHeader(title: "Choose parking time")
+                    HStack {
+                        Label("Hourly rate", systemImage: "clock")
+                            .font(AppTypography.bodySmall)
+                            .foregroundStyle(AppColors.textSecondary)
+                        Spacer(minLength: AppSpacing.small)
+                        Text("LKR \(zone.hourlyRateLKR.formatted())")
+                            .font(AppTypography.bodyBold)
+                    }
                     if durations.isEmpty {
                         AppMessageView(title: "No parking time available", message: "The zone is closed or too close to closing time.", appearance: .warning)
                     } else {
@@ -158,10 +190,38 @@ struct ParkingSetupView: View {
                     if let price = viewModel.estimatedPrice(zone: zone, at: clock.date) {
                         Divider()
                         AppSectionHeader(title: "Review your parking")
-                        reviewDetail("Duration", value: "\(viewModel.selectedMinutes) minutes")
-                        reviewDetail("Expected paid until", value: formattedDate(clock.date.addingTimeInterval(TimeInterval(viewModel.selectedMinutes * 60))))
+                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                            reviewDetail("Duration", value: "\(viewModel.selectedMinutes) minutes")
+                            reviewDetail("Expected paid until", value: formattedDate(clock.date.addingTimeInterval(TimeInterval(viewModel.selectedMinutes * 60))))
+                        }
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Parking total")
+                                    .font(AppTypography.bodyBold)
+                                    .foregroundStyle(AppColors.textLight)
+                                Spacer(minLength: AppSpacing.small)
+                                Text("LKR \(price.formatted())")
+                                    .font(AppTypography.priceDisplay)
+                                    .foregroundStyle(AppColors.accent)
+                                    .fixedSize()
+                            }
+                            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                                Text("Parking total")
+                                    .font(AppTypography.bodyBold)
+                                    .foregroundStyle(AppColors.textLight)
+                                Text("LKR \(price.formatted())")
+                                    .font(AppTypography.priceDisplay)
+                                    .foregroundStyle(AppColors.accent)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
                         walletBalance(price: price)
-                        reviewDetail("Parking total", value: "LKR \(price.formatted())")
                         Text("Parking is paid from your wallet. Unused time is not refundable.")
                             .font(AppTypography.caption)
                             .foregroundStyle(AppColors.textSecondary)
@@ -185,38 +245,46 @@ struct ParkingSetupView: View {
     }
 
     private func activeSessionDetails(_ session: ParkingSession) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { clock in
-            VStack(alignment: .leading, spacing: AppSpacing.large) {
-                AppCard {
-                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        AppSectionHeader(
-                            title: "Parking receipt",
-                            subtitle: "Started \(formattedDate(session.startTime))"
-                        )
-                        AppStatusBadge(title: session.paidUntil > clock.date ? "Parking active" : "Paid time expired", appearance: session.paidUntil > clock.date ? .success : .error)
-                        if session.paidUntil > clock.date {
-                            Text(timerInterval: clock.date...session.paidUntil, countsDown: true)
-                                .font(AppTypography.timerDisplay)
-                                .accessibilityLabel("Parking time remaining")
+        VStack(alignment: .leading, spacing: AppSpacing.large) {
+            AppCard {
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    AppSectionHeader(
+                        title: "Parking receipt",
+                        subtitle: "Started \(formattedDate(session.startTime))"
+                    )
+                    TimelineView(.periodic(from: .now, by: 1)) { clock in
+                        VStack(alignment: .leading, spacing: AppSpacing.small) {
+                            AppStatusBadge(title: session.paidUntil > clock.date ? "Parking active" : "Paid time expired", appearance: session.paidUntil > clock.date ? .success : .error)
+                            if session.paidUntil > clock.date {
+                                Text(timerInterval: clock.date...session.paidUntil, countsDown: true)
+                                    .font(AppTypography.timerDisplay)
+                                    .accessibilityLabel("Parking time remaining")
+                            }
                         }
-                        reviewDetail("Parking zone", value: session.zoneName)
-                        Label(session.licensePlate, systemImage: "car").font(AppTypography.bodyBold)
-                        reviewDetail("Paid until", value: formattedDate(session.paidUntil))
-                        reviewDetail("Total paid", value: "LKR \(session.totalPaidLKR.formatted())")
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(session.paidUntil > clock.date ? AppColors.accentBackground : AppColors.statusOverstayBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
                     }
+                    reviewDetail("Parking zone", value: session.zoneName)
+                    Label(session.licensePlate, systemImage: "car")
+                        .font(AppTypography.bodyBold)
+                    reviewDetail("Paid until", value: formattedDate(session.paidUntil))
+                    reviewDetail("Total paid", value: "LKR \(session.totalPaidLKR.formatted())")
                 }
+            }
+            TimelineView(.periodic(from: .now, by: 60)) { clock in
                 extensionDetails(at: clock.date)
-                AppCard {
-                    VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                        Text("Unused parking time is not refundable.")
-                            .font(AppTypography.bodySmall)
-                            .foregroundStyle(AppColors.textSecondary)
-                        AppButton(title: viewModel.isEndingParking ? "Ending…" : "End Parking", appearance: .destructive, isLoading: viewModel.isEndingParking) {
-                            sessionToEndId = session.id
-                            isShowingEndConfirmation = true
-                        }
-                        .disabled(viewModel.isBusy)
+            }
+            AppCard {
+                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                    Text("Unused parking time is not refundable.")
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.textSecondary)
+                    AppButton(title: viewModel.isEndingParking ? "Ending…" : "End Parking", appearance: .destructive, isLoading: viewModel.isEndingParking) {
+                        sessionToEndId = session.id
+                        isShowingEndConfirmation = true
                     }
+                    .disabled(viewModel.isBusy)
                 }
             }
         }
@@ -241,9 +309,37 @@ struct ParkingSetupView: View {
                     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
                     .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
                     if let price = viewModel.extensionPrice(at: time), let session = viewModel.activeSession {
-                        reviewDetail("New paid until", value: formattedDate(session.paidUntil.addingTimeInterval(TimeInterval(viewModel.selectedExtensionMinutes * 60))))
+                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                            reviewDetail("New paid until", value: formattedDate(session.paidUntil.addingTimeInterval(TimeInterval(viewModel.selectedExtensionMinutes * 60))))
+                        }
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("Extension total")
+                                    .font(AppTypography.bodyBold)
+                                    .foregroundStyle(AppColors.textLight)
+                                Spacer(minLength: AppSpacing.small)
+                                Text("LKR \(price.formatted())")
+                                    .font(AppTypography.priceDisplay)
+                                    .foregroundStyle(AppColors.accent)
+                                    .fixedSize()
+                            }
+                            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                                Text("Extension total")
+                                    .font(AppTypography.bodyBold)
+                                    .foregroundStyle(AppColors.textLight)
+                                Text("LKR \(price.formatted())")
+                                    .font(AppTypography.priceDisplay)
+                                    .foregroundStyle(AppColors.accent)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
                         walletBalance(price: price)
-                        reviewDetail("Extension total", value: "LKR \(price.formatted())")
                         Text("Extra time starts from your current paid-until time. Unused time is not refundable.")
                             .font(AppTypography.caption)
                             .foregroundStyle(AppColors.textSecondary)
@@ -273,7 +369,12 @@ struct ParkingSetupView: View {
                     AppMessageView(title: "Add funds to continue", message: "You need LKR \((price - balance).formatted()) more.", appearance: .warning)
                 }
             } else if !viewModel.walletErrorMessage.isEmpty {
-                AppMessageView(title: viewModel.walletErrorMessage, appearance: .warning)
+                AppMessageView(
+                    title: viewModel.walletErrorMessage,
+                    appearance: .warning,
+                    actionTitle: "Try Again",
+                    action: { Task { await viewModel.loadWalletBalance() } }
+                )
             }
             NavigationLink {
                 WalletView(profile: profile)

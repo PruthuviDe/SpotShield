@@ -23,7 +23,12 @@ struct WardenRecordsView: View {
                 }
 
                 if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    AppMessageView(
+                        title: viewModel.errorMessage,
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadObservations() } }
+                    )
                 }
 
                 if viewModel.observations.isEmpty {
@@ -45,15 +50,6 @@ struct WardenRecordsView: View {
                     }
                 }
 
-                AppButton(
-                    title: "Refresh Records",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoading
-                ) {
-                    Task { await viewModel.loadObservations() }
-                }
-                .disabled(viewModel.isLoading)
             }
             .frame(maxWidth: 720, alignment: .leading)
             .padding(AppSpacing.large)
@@ -63,27 +59,33 @@ struct WardenRecordsView: View {
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Records")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            Task { await viewModel.loadObservations() }
-        }
+        .refreshOnAppearAndForeground { await viewModel.loadObservations() }
         .refreshable { await viewModel.loadObservations() }
     }
 
     private func observationCard(_ observation: WardenObservation) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                AppStatusBadge(
-                    title: observation.reviewStatus.rawValue,
-                    appearance: appearance(for: observation.reviewStatus)
-                )
+                HStack(alignment: .top, spacing: AppSpacing.small) {
+                    AppStatusBadge(
+                        title: observation.reviewStatus.rawValue,
+                        appearance: appearance(for: observation.reviewStatus)
+                    )
+                    Spacer(minLength: AppSpacing.small)
+                    Text(observation.observedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.trailing)
+                }
 
-                Text(observation.zoneName)
+                Text(observation.licensePlate)
                     .font(AppTypography.titleMedium)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Label(observation.licensePlate, systemImage: "car")
-                    .font(AppTypography.bodyBold)
                     .textSelection(.enabled)
+
+                Label(observation.zoneName, systemImage: "mappin.and.ellipse")
+                    .font(AppTypography.bodySmall)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
                     Text("Parking check")
@@ -91,44 +93,58 @@ struct WardenRecordsView: View {
                         .foregroundStyle(AppColors.textSecondary)
 
                     Text(observation.parkingStatus)
-                        .font(AppTypography.bodySmall)
+                        .font(AppTypography.bodyMedium)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(AppSpacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
 
-                Label(
-                    observation.observedAt.formatted(date: .abbreviated, time: .shortened),
-                    systemImage: "clock"
-                )
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
-
-                if let notes = observation.notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
-                        Text("Your notes")
-                            .font(AppTypography.captionBold)
-                            .foregroundStyle(AppColors.textSecondary)
-
-                        Text(notes)
-                            .font(AppTypography.bodySmall)
-                            .fixedSize(horizontal: false, vertical: true)
+                if hasReportDetails(observation) {
+                    DisclosureGroup("Report details") {
+                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                            if let notes = observation.notes, !notes.isEmpty {
+                                recordDetail("Your notes", value: notes)
+                            }
+                            if let reason = observation.decisionReason, !reason.isEmpty {
+                                AppMessageView(
+                                    title: "Administrator decision",
+                                    message: reason,
+                                    appearance: observation.reviewStatus == .dismissed ? .success : .neutral
+                                )
+                            }
+                            if let ticketId = observation.ticketId, !ticketId.isEmpty {
+                                recordDetail("Ticket ID", value: ticketId)
+                            }
+                            if let paymentStatus = observation.ticketPaymentStatus, !paymentStatus.isEmpty {
+                                recordDetail("Ticket payment", value: paymentStatus)
+                            }
+                        }
+                        .padding(.top, AppSpacing.medium)
                     }
-                }
-
-                if let reason = observation.decisionReason, !reason.isEmpty {
-                    AppMessageView(
-                        title: "Administrator decision",
-                        message: reason,
-                        appearance: observation.reviewStatus == .dismissed ? .success : .neutral
-                    )
-                }
-
-                if let ticketId = observation.ticketId, !ticketId.isEmpty {
-                    Text("Ticket ID: \(ticketId)")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(AppColors.textSecondary)
-                        .textSelection(.enabled)
+                    .font(AppTypography.bodyBold)
+                    .tint(AppColors.textPrimary)
                 }
             }
+        }
+    }
+
+    private func hasReportDetails(_ observation: WardenObservation) -> Bool {
+        (observation.notes?.isEmpty == false)
+            || (observation.decisionReason?.isEmpty == false)
+            || (observation.ticketId?.isEmpty == false)
+            || (observation.ticketPaymentStatus?.isEmpty == false)
+    }
+
+    private func recordDetail(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+            Text(title)
+                .font(AppTypography.captionBold)
+                .foregroundStyle(AppColors.textSecondary)
+            Text(value)
+                .font(AppTypography.bodySmall)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
         }
     }
 

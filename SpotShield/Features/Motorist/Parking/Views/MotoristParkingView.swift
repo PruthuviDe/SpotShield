@@ -17,15 +17,42 @@ struct MotoristParkingView: View {
                 if viewModel.isLoading {
                     AppLoadingView(title: "Loading parking zones…")
                 } else if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    AppMessageView(
+                        title: viewModel.errorMessage,
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadZones() } }
+                    )
                 }
                 if !viewModel.zones.isEmpty {
                     NavigationLink {
                         ParkingZoneMapView(zones: viewModel.zones)
                     } label: {
-                        Label("View Parking Map", systemImage: "map")
+                        HStack(spacing: AppSpacing.medium) {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(AppColors.accent)
+                                .frame(width: 52, height: 52)
+                                .background(AppColors.buttonBackground, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
+                            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                                Text("Explore on the map")
+                                    .font(AppTypography.titleSmall)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Text("Browse parking zones on the map")
+                                    .font(AppTypography.bodySmall)
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
+                            Spacer(minLength: AppSpacing.small)
+                            Image(systemName: "chevron.right")
+                                .font(AppTypography.captionBold)
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        .padding(AppSpacing.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppColors.card, in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard))
                     }
-                    .buttonStyle(AppButtonStyle())
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the parking zone map")
                 } else if !viewModel.isLoading, viewModel.errorMessage.isEmpty {
                     AppEmptyStateView(title: "No zones available", message: "Check again later for available parking zones.", systemImage: "map")
                 }
@@ -40,10 +67,6 @@ struct MotoristParkingView: View {
                 Text("All parking hours are shown in Sri Lanka time.")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
-                AppButton(title: "Refresh Zones", systemImage: "arrow.clockwise", appearance: .secondary) {
-                    Task { await viewModel.loadZones() }
-                }
-                .disabled(viewModel.isLoading)
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 720, alignment: .leading)
@@ -53,25 +76,54 @@ struct MotoristParkingView: View {
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Parking Zones")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.loadZones() }
+        .refreshOnAppearAndForeground { await viewModel.loadZones() }
         .refreshable { await viewModel.loadZones() }
     }
 
     private func zoneCard(_ zone: ParkingZone) -> some View {
         AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
-                AppStatusBadge(title: zone.isActive ? "Check opening hours" : "Unavailable", appearance: .neutral)
-                HStack(alignment: .firstTextBaseline) {
-                    Text(zone.name).font(AppTypography.titleMedium)
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
+                HStack(alignment: .top, spacing: AppSpacing.medium) {
+                    VStack(alignment: .leading, spacing: AppSpacing.small) {
+                        AppStatusBadge(title: zone.isActive ? "Zone active" : "Unavailable", appearance: zone.isActive ? .success : .neutral)
+                        Text(zone.name)
+                            .font(AppTypography.titleMedium)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Spacer(minLength: AppSpacing.small)
-                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                    Image(systemName: "chevron.right")
+                        .font(AppTypography.captionBold)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .padding(.top, AppSpacing.small)
+                        .accessibilityHidden(true)
                 }
-                Text("LKR \(zone.hourlyRateLKR.formatted()) / hour")
-                    .font(AppTypography.priceDisplay)
-                Label("\(String(format: "%02d:00", zone.openingHour))–\(String(format: "%02d:00", zone.closingHour))", systemImage: "clock")
-                Label("Up to \(zone.maximumStayMinutes) minutes", systemImage: "hourglass")
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xSmall) {
+                    Text("LKR \(zone.hourlyRateLKR.formatted())")
+                        .font(AppTypography.priceDisplay)
+                    Text("per hour")
+                        .font(AppTypography.bodySmall)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                Divider()
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AppSpacing.large) {
+                        zoneDetail("\(String(format: "%02d:00", zone.openingHour))–\(String(format: "%02d:00", zone.closingHour))", systemImage: "clock")
+                        zoneDetail("Up to \(zone.maximumStayMinutes) min", systemImage: "hourglass")
+                    }
+                    VStack(alignment: .leading, spacing: AppSpacing.small) {
+                        zoneDetail("\(String(format: "%02d:00", zone.openingHour))–\(String(format: "%02d:00", zone.closingHour))", systemImage: "clock")
+                        zoneDetail("Up to \(zone.maximumStayMinutes) min", systemImage: "hourglass")
+                    }
+                }
             }
             .foregroundStyle(AppColors.textPrimary)
         }
+    }
+
+    private func zoneDetail(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(AppTypography.bodySmall)
+            .foregroundStyle(AppColors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

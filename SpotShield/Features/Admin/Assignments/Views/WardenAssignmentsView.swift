@@ -25,15 +25,6 @@ struct WardenAssignmentsView: View {
                 feedback
                 newAssignmentSection
                 assignmentsSection
-
-                AppButton(
-                    title: "Refresh assignments",
-                    systemImage: "arrow.clockwise",
-                    appearance: .secondary,
-                    isLoading: viewModel.isLoading
-                ) {
-                    Task { await viewModel.loadData() }
-                }
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 680, alignment: .leading)
@@ -45,9 +36,7 @@ struct WardenAssignmentsView: View {
         .tint(AppColors.textPrimary)
         .navigationTitle("Warden Assignments")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await viewModel.loadData()
-        }
+        .refreshOnAppearAndForeground { await viewModel.loadData() }
         .refreshable {
             await viewModel.loadData()
         }
@@ -82,7 +71,9 @@ struct WardenAssignmentsView: View {
             AppMessageView(
                 title: "Could not update Warden coverage",
                 message: viewModel.errorMessage,
-                appearance: .error
+                appearance: .error,
+                actionTitle: "Try Again",
+                action: { Task { await viewModel.loadData() } }
             )
         }
 
@@ -184,13 +175,14 @@ struct WardenAssignmentsView: View {
 
     private func assignmentCard(assignment: WardenAssignment) -> some View {
         AppCard {
-            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+            VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack(alignment: .top, spacing: AppSpacing.small) {
                     VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
                         Text(zoneName(zoneId: assignment.parkingZoneId))
-                            .font(AppTypography.titleSmall)
+                            .font(AppTypography.titleMedium)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                        Text(wardenName(userId: assignment.wardenUserId))
+                        Label(wardenName(userId: assignment.wardenUserId), systemImage: "person")
                             .font(AppTypography.bodySmall)
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -202,21 +194,15 @@ struct WardenAssignmentsView: View {
                     )
                 }
 
-                Label(
-                    "Started \(assignment.assignedAt.formatted(date: .abbreviated, time: .shortened))",
-                    systemImage: "calendar"
-                )
-                .font(AppTypography.caption)
-                .foregroundStyle(AppColors.textSecondary)
-
-                if let endedAt = assignment.endedAt {
-                    Label(
-                        "Ended \(endedAt.formatted(date: .abbreviated, time: .shortened))",
-                        systemImage: "calendar.badge.clock"
-                    )
-                    .font(AppTypography.caption)
-                    .foregroundStyle(AppColors.textSecondary)
+                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                    assignmentDate("Assigned", date: assignment.assignedAt)
+                    if let endedAt = assignment.endedAt {
+                        assignmentDate("Ended", date: endedAt)
+                    }
                 }
+                .padding(AppSpacing.medium)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppColors.background, in: RoundedRectangle(cornerRadius: AppSpacing.radiusButton))
 
                 if assignment.isActive {
                     AppButton(
@@ -229,6 +215,25 @@ struct WardenAssignmentsView: View {
                     }
                     .disabled(viewModel.isLoading)
                 }
+            }
+        }
+    }
+
+    private func assignmentDate(_ title: String, date: Date) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text(title)
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer(minLength: AppSpacing.small)
+                Text(date.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.bodySmall.weight(.semibold))
+            }
+            VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                Text(title)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(AppColors.textSecondary)
+                Text(date.formatted(date: .abbreviated, time: .shortened))
+                    .font(AppTypography.bodySmall.weight(.semibold))
             }
         }
     }

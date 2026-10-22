@@ -26,7 +26,12 @@ struct WalletView: View {
                     AppLoadingView(title: "Loading your wallet…")
                 }
                 if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    AppMessageView(
+                        title: viewModel.errorMessage,
+                        appearance: .error,
+                        actionTitle: "Try Again",
+                        action: { Task { await viewModel.loadWallet() } }
+                    )
                 }
                 if let wallet = viewModel.wallet {
                     walletDetails(wallet)
@@ -40,10 +45,6 @@ struct WalletView: View {
                     autoDeductSetting(wallet)
                     transactionHistory
                 }
-                AppButton(title: "Refresh Wallet", systemImage: "arrow.clockwise", appearance: .secondary) {
-                    Task { await viewModel.loadWallet() }
-                }
-                .disabled(isBusy)
             }
             .padding(AppSpacing.large)
             .frame(maxWidth: 720, alignment: .leading)
@@ -54,7 +55,7 @@ struct WalletView: View {
         .tint(AppColors.textPrimary)
         .navigationTitle("Wallet")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await viewModel.loadWallet() }
+        .refreshOnAppearAndForeground { await viewModel.loadWallet() }
         .refreshable { await viewModel.loadWallet() }
         .confirmationDialog("Enable automatic ticket payments?", isPresented: $showAutoDeductConfirmation, titleVisibility: .visible) {
             Button("Enable Auto-deduction") {
@@ -111,26 +112,63 @@ struct WalletView: View {
     private var transactionHistory: some View {
         VStack(alignment: .leading, spacing: AppSpacing.medium) {
             AppSectionHeader(title: "Recent transactions")
-            if viewModel.isLoading {
+            if viewModel.isLoading && viewModel.transactions.isEmpty {
                 AppLoadingView(title: "Loading transactions…")
-            } else if !viewModel.historyErrorMessage.isEmpty {
-                AppMessageView(title: viewModel.historyErrorMessage, appearance: .error)
-            } else if viewModel.transactions.isEmpty {
+            }
+            if !viewModel.historyErrorMessage.isEmpty {
+                AppMessageView(
+                    title: viewModel.historyErrorMessage,
+                    appearance: .error,
+                    actionTitle: "Try Again",
+                    action: { Task { await viewModel.loadWallet() } }
+                )
+            }
+            if viewModel.isLoading && !viewModel.transactions.isEmpty {
+                ProgressView("Updating transactions…")
+                    .font(AppTypography.bodySmall)
+            }
+            if viewModel.transactions.isEmpty && !viewModel.isLoading && viewModel.historyErrorMessage.isEmpty {
                 AppEmptyStateView(title: "No transactions yet", message: "Your top-ups and payments will appear here.", systemImage: "creditcard")
-            } else {
-                ForEach(viewModel.transactions) { transaction in
-                    AppCard {
-                        VStack(alignment: .leading, spacing: AppSpacing.small) {
-                            Text(transaction.type.rawValue).font(AppTypography.bodyBold)
-                            Text(transaction.createdAt, format: .dateTime.day().month().year().hour().minute())
+            }
+            if !viewModel.transactions.isEmpty {
+                AppCard {
+                    VStack(spacing: 0) {
+                        ForEach(viewModel.transactions) { transaction in
+                            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                                HStack(alignment: .top, spacing: AppSpacing.small) {
+                                    Image(systemName: transactionIcon(for: transaction))
+                                        .font(AppTypography.bodyBold)
+                                        .foregroundStyle(transaction.type == .topUp ? AppColors.statusValid : AppColors.textPrimary)
+                                        .frame(width: 42, height: 42)
+                                        .background(transaction.type == .topUp ? AppColors.statusValidBackground : AppColors.background, in: Circle())
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: AppSpacing.xxSmall) {
+                                        Text(transaction.type.rawValue)
+                                            .font(AppTypography.bodyBold)
+                                        Text(transaction.createdAt, format: .dateTime.day().month().year().hour().minute())
+                                            .font(AppTypography.caption)
+                                            .foregroundStyle(AppColors.textSecondary)
+                                    }
+                                    Spacer(minLength: AppSpacing.small)
+                                    Text("\(transaction.type == .topUp ? "+" : "−") LKR \(transaction.amountLKR.formatted())")
+                                        .font(AppTypography.bodyBold)
+                                        .foregroundStyle(transaction.type == .topUp ? AppColors.statusValid : AppColors.textPrimary)
+                                        .multilineTextAlignment(.trailing)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                HStack {
+                                    Text("Balance after")
+                                        .foregroundStyle(AppColors.textSecondary)
+                                    Spacer(minLength: AppSpacing.small)
+                                    Text("LKR \(transaction.balanceAfterLKR.formatted())")
+                                        .font(AppTypography.bodySmall.weight(.semibold))
+                                }
                                 .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.textSecondary)
-                            Text("\(transaction.type == .topUp ? "+" : "−") LKR \(transaction.amountLKR.formatted())")
-                                .font(AppTypography.priceDisplay)
-                                .foregroundStyle(transaction.type == .topUp ? AppColors.statusValid : AppColors.textPrimary)
-                            Text("Balance after: LKR \(transaction.balanceAfterLKR.formatted())")
-                                .font(AppTypography.caption)
-                                .foregroundStyle(AppColors.textSecondary)
+                            }
+                            .padding(.vertical, AppSpacing.medium)
+                            if transaction.id != viewModel.transactions.last?.id {
+                                Divider()
+                            }
                         }
                     }
                 }
@@ -140,6 +178,15 @@ struct WalletView: View {
                         .foregroundStyle(AppColors.textSecondary)
                 }
             }
+        }
+    }
+
+    private func transactionIcon(for transaction: WalletTransaction) -> String {
+        switch transaction.type {
+        case .topUp: "plus"
+        case .parkingPayment: "parkingsign.circle"
+        case .parkingExtension: "clock.arrow.circlepath"
+        case .ticketPayment: "doc.text"
         }
     }
 }
