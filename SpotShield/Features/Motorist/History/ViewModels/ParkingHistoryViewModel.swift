@@ -27,7 +27,6 @@ final class ParkingHistoryViewModel {
             return
         }
 
-        sessions = []
         errorMessage = ""
 
         guard profile.role == .motorist else {

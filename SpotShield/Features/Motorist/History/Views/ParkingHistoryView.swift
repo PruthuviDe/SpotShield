@@ -29,13 +29,19 @@ struct ParkingHistoryView: View {
                 }
                 .buttonStyle(AppButtonStyle(appearance: .secondary))
 
-                if viewModel.isLoading {
-                    AppLoadingView(title: "Loading parking history…")
-                } else if !viewModel.errorMessage.isEmpty {
-                    AppMessageView(title: viewModel.errorMessage, appearance: .error)
-                } else if viewModel.sessions.isEmpty {
-                    AppEmptyStateView(title: "No parking history yet", message: "Your completed parking sessions will appear here.", systemImage: "clock.arrow.circlepath")
+                if viewModel.sessions.isEmpty {
+                    if viewModel.isLoading {
+                        AppLoadingView(title: "Loading parking history…")
+                    } else if !viewModel.errorMessage.isEmpty {
+                        AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    } else {
+                        AppEmptyStateView(title: "No parking history yet", message: "Your completed parking sessions will appear here.", systemImage: "clock.arrow.circlepath")
+                    }
                 } else {
+                    if !viewModel.errorMessage.isEmpty {
+                        AppMessageView(title: viewModel.errorMessage, appearance: .error)
+                    }
+
                     Text(
                         "Showing up to 50 ended sessions. "
                         + "Times are shown in Sri Lanka time."
@@ -56,6 +62,7 @@ struct ParkingHistoryView: View {
                 .disabled(viewModel.isLoading)
             }
             .padding(AppSpacing.large)
+            .padding(.bottom, AppSpacing.xxLarge * 2)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
         }

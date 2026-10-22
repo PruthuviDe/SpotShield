@@ -84,10 +84,8 @@ final class ProfileViewModel {
             return
         }
 
-        vehicle = nil
-        vehicleMessage = ""
-
         guard let vehicleId = profile.primaryVehicleId else {
+            vehicle = nil
             vehicleMessage = "No vehicle is linked to this account."
             return
         }

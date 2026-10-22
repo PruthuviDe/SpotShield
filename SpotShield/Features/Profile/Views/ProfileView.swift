@@ -49,6 +49,7 @@ struct ProfileView: View {
             .frame(maxWidth: 560, alignment: .leading)
             .frame(maxWidth: .infinity)
             .padding(AppSpacing.large)
+            .padding(.bottom, AppSpacing.xxLarge * 2)
         }
         .font(AppTypography.bodyMedium)
         .foregroundStyle(AppColors.textPrimary)
