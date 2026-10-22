@@ -7,14 +7,18 @@
 
 import AVFoundation
 import SwiftUI
+import UIKit
 import VisionKit
 
 struct WardenPlateScanning: View {
     let onPlateScanned: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isPreparingCamera = true
     @State private var scannerIsReady = false
+    @State private var cameraAccessDenied = false
     @State private var errorMessage = ""
 
     var body: some View {
@@ -30,7 +34,10 @@ struct WardenPlateScanning: View {
 
                         onPlateScanned(plate)
                         dismiss()
+                    } onError: { error in
+                        showCameraMessage("The camera could not start. \(error)")
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: .bottom)
 
                     VStack {
@@ -60,6 +67,17 @@ struct WardenPlateScanning: View {
                                 appearance: .warning
                             )
 
+                            if cameraAccessDenied,
+                               let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                                AppButton(
+                                    title: "Open Settings",
+                                    systemImage: "gearshape",
+                                    appearance: .secondary
+                                ) {
+                                    openURL(settingsURL)
+                                }
+                            }
+
                             Text("Close this screen to enter the plate manually.")
                                 .font(AppTypography.bodySmall)
                                 .foregroundStyle(AppColors.textSecondary)
@@ -84,6 +102,11 @@ struct WardenPlateScanning: View {
         .task {
             await prepareCamera()
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, cameraAccessDenied else { return }
+            isPreparingCamera = true
+            Task { await prepareCamera() }
+        }
     }
 
     @MainActor
@@ -100,8 +123,10 @@ struct WardenPlateScanning: View {
             cameraAuthorized = true
         case .notDetermined:
             cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
+            cameraAccessDenied = !cameraAuthorized
         case .denied, .restricted:
             cameraAuthorized = false
+            cameraAccessDenied = AVCaptureDevice.authorizationStatus(for: .video) == .denied
         @unknown default:
             cameraAuthorized = false
         }
@@ -122,6 +147,7 @@ struct WardenPlateScanning: View {
 
     private func showCameraMessage(_ message: String) {
         errorMessage = message
+        scannerIsReady = false
         isPreparingCamera = false
     }
 }
