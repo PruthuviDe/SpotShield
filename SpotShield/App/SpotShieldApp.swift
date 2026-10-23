@@ -15,7 +15,9 @@ struct SpotShieldApp: App {
     init() {
         NotificationManager.shared.configure()
         FirebaseConfig.configure()
-        LocationManager.shared.updateSignedInUser(Auth.auth().currentUser?.uid)
+        let userId = Auth.auth().currentUser?.uid
+        NotificationManager.shared.updateSignedInUser(userId)
+        LocationManager.shared.updateSignedInUser(userId)
         _appState = State(initialValue: AppState())
     }
 

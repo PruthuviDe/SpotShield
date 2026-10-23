@@ -35,6 +35,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     private var serviceSession: CLServiceSession?
     private var monitorTask: Task<Void, Never>?
     private var eventTask: Task<Void, Never>?
+    private var eventStreamID: UUID?
     private var diagnosticTask: Task<Void, Never>?
     private var monitorVersion = UUID()
     private var monitoredZones: [MonitoredParkingZone] = []
@@ -282,7 +283,6 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         monitorVersion = UUID()
         let version = monitorVersion
         monitorTask?.cancel()
-        eventTask?.cancel()
         isRequestingArrivalAlerts = true
 
         monitorTask = Task { [weak self] in
@@ -298,7 +298,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
             }
 
             self.monitor = activeMonitor
-            self.startEventStream(for: activeMonitor, version: version)
+            self.startEventStream(for: activeMonitor)
 
             let existingIdentifiers = await activeMonitor.identifiers
             let desiredIdentifiers = Set(zones.map(\.conditionIdentifier))
@@ -343,13 +343,24 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
-    private func startEventStream(for monitor: CLMonitor, version: UUID) {
+    private func startEventStream(for monitor: CLMonitor) {
+        guard eventTask == nil else { return }
+        let streamID = UUID()
+        eventStreamID = streamID
+
         eventTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.eventStreamID == streamID {
+                    self.eventTask = nil
+                    self.eventStreamID = nil
+                }
+            }
+
             do {
                 for try await event in await monitor.events {
                     guard !Task.isCancelled,
-                          let self,
-                          self.monitorVersion == version else {
+                          self.eventStreamID == streamID else {
                         break
                     }
 
@@ -368,7 +379,8 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
                     )
                 }
             } catch {
-                guard let self, self.monitorVersion == version else { return }
+                guard !Task.isCancelled,
+                      self.eventStreamID == streamID else { return }
                 self.arrivalAlertsMessage = "Arrival alerts could not start. Try enabling them again."
                 self.isRequestingArrivalAlerts = false
             }
@@ -412,6 +424,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         monitorTask?.cancel()
         eventTask?.cancel()
         diagnosticTask?.cancel()
+        eventStreamID = nil
         serviceSession = nil
         monitorTask = nil
         eventTask = nil
