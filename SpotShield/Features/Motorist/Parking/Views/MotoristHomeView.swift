@@ -127,7 +127,7 @@ struct MotoristHomeView: View {
                 }
 
                 NavigationLink {
-                    MotoristParkingView()
+                    MotoristParkingView(profile: profile)
                 } label: {
                     Label("Find Parking", systemImage: "map")
                 }
@@ -202,7 +202,7 @@ struct MotoristHomeView: View {
                 .buttonStyle(AppButtonStyle())
 
                 NavigationLink {
-                    MotoristParkingView()
+                    MotoristParkingView(profile: profile)
                 } label: {
                     Label("Find Parking", systemImage: "map")
                 }

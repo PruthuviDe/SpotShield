@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 @main
 struct SpotShieldApp: App {
@@ -14,6 +15,7 @@ struct SpotShieldApp: App {
     init() {
         NotificationManager.shared.configure()
         FirebaseConfig.configure()
+        LocationManager.shared.updateSignedInUser(Auth.auth().currentUser?.uid)
         _appState = State(initialValue: AppState())
     }
 

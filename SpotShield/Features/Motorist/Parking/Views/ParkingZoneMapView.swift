@@ -7,14 +7,16 @@
 
 import MapKit
 import SwiftUI
+import UIKit
 
 struct ParkingZoneMapView: View {
     let zones: [ParkingZone]
+    let userId: String
 
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var selectedZoneID: String?
     @State private var selectedZone: ParkingZone?
-    @StateObject private var locationManager = LocationManager()
+    @StateObject private var locationManager = LocationManager.shared
 
     var body: some View {
         Map(position: $cameraPosition, selection: $selectedZoneID) {
@@ -53,17 +55,57 @@ struct ParkingZoneMapView: View {
             }
         }
         .overlay(alignment: .top) {
-            Text(locationManager.statusMessage(for: zones))
-                .font(AppTypography.bodySmall)
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(AppSpacing.medium)
-                .background(
-                    .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
-                )
-                .padding()
+            VStack(alignment: .leading, spacing: AppSpacing.small) {
+                Text(locationManager.statusMessage(for: zones))
+                    .font(AppTypography.bodySmall)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    Task {
+                        await locationManager.setArrivalAlertsEnabled(
+                            for: zones,
+                            userId: userId
+                        )
+                    }
+                } label: {
+                    Label(
+                        locationManager.hasArrivalAlertsOptIn
+                            ? "Turn Off Arrival Alerts"
+                            : "Enable Arrival Alerts",
+                        systemImage: locationManager.hasArrivalAlertsOptIn
+                            ? "location.slash"
+                            : "location"
+                    )
+                    .font(AppTypography.captionBold)
+                }
+                .foregroundStyle(AppColors.accent)
+                .disabled(locationManager.isRequestingArrivalAlerts)
+
+                if !locationManager.arrivalAlertsMessage.isEmpty {
+                    Text(locationManager.arrivalAlertsMessage)
+                        .font(AppTypography.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if locationManager.shouldOpenSettingsForArrivalAlerts {
+                    Button("Open Settings") {
+                        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
+                            return
+                        }
+                        UIApplication.shared.open(settingsURL)
+                    }
+                    .font(AppTypography.captionBold)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(AppSpacing.medium)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: AppSpacing.radiusCard)
+            )
+            .padding()
         }
         .mapControls {
             MapCompass()
@@ -72,6 +114,7 @@ struct ParkingZoneMapView: View {
         }
         .onAppear {
             locationManager.requestLocationAccess()
+            locationManager.updateMonitoredZones(zones, userId: userId)
         }
         .onDisappear {
             locationManager.stopUpdatingLocation()

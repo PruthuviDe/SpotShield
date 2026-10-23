@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct MotoristParkingView: View {
+    let profile: UserProfile
     @State private var viewModel = MotoristParkingViewModel()
 
     var body: some View {
@@ -26,7 +27,7 @@ struct MotoristParkingView: View {
                 }
                 if !viewModel.zones.isEmpty {
                     NavigationLink {
-                        ParkingZoneMapView(zones: viewModel.zones)
+                        ParkingZoneMapView(zones: viewModel.zones, userId: profile.id)
                     } label: {
                         HStack(spacing: AppSpacing.medium) {
                             Image(systemName: "map.fill")

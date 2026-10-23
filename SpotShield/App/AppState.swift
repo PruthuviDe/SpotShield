@@ -55,6 +55,7 @@ final class AppState {
 
         let userId = auth.currentUser?.uid
         NotificationManager.shared.updateSignedInUser(userId)
+        LocationManager.shared.updateSignedInUser(userId)
 
         guard let userId else {
             BiometricManager.shared.clearUnlockedUser()
@@ -192,6 +193,7 @@ final class AppState {
             try authService.signOut()
             BiometricManager.shared.clearUnlockedUser()
             NotificationManager.shared.updateSignedInUser(nil)
+            LocationManager.shared.updateSignedInUser(nil)
             Task {
                 await LiveActivityManager.shared.end()
             }

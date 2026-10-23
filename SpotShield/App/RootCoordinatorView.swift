@@ -14,6 +14,7 @@ struct RootCoordinatorView: View {
     @State private var showSignUp = false
     @State private var showStaffSignIn = false
     @State private var activityParkingSessionId: String?
+    @State private var parkingZoneIdToOpen: String?
     @State private var notificationManager = NotificationManager.shared
     @State private var biometricManager = BiometricManager.shared
     @State private var hasEnteredBackground = false
@@ -56,6 +57,12 @@ struct RootCoordinatorView: View {
             activityParkingSessionId = sessionId
             notificationManager.parkingSessionToOpen = nil
         }
+        .onChange(of: notificationManager.parkingZoneToOpen, initial: true) { _, _ in
+            openPendingZoneArrival()
+        }
+        .onChange(of: signedInProfileId, initial: true) { _, _ in
+            openPendingZoneArrival()
+        }
     }
 
     @ViewBuilder
@@ -69,7 +76,8 @@ struct RootCoordinatorView: View {
         } else {
             RoleNavigationView(
                 profile: profile,
-                parkingSessionId: $activityParkingSessionId
+                parkingSessionId: $activityParkingSessionId,
+                parkingZoneId: $parkingZoneIdToOpen
             )
             .id(profile.id)
         }
@@ -84,6 +92,30 @@ struct RootCoordinatorView: View {
         }
 
         activityParkingSessionId = sessionId
+    }
+
+    private var signedInProfileId: String? {
+        guard case .signedIn(let profile) = appState.authState else {
+            return nil
+        }
+        return profile.id
+    }
+
+    private func openPendingZoneArrival() {
+        guard let destination = notificationManager.parkingZoneToOpen,
+              let profileId = signedInProfileId else {
+            return
+        }
+
+        guard destination.userId == profileId,
+              case .signedIn(let profile) = appState.authState,
+              profile.role == .motorist else {
+            notificationManager.parkingZoneToOpen = nil
+            return
+        }
+
+        parkingZoneIdToOpen = destination.zoneId
+        notificationManager.parkingZoneToOpen = nil
     }
     
     private var loadingView: some View {

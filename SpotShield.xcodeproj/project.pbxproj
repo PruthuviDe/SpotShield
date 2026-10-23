@@ -402,6 +402,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "SpotShield uses Face ID to protect access to your signed-in account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "SpotShield monitors active parking zones in the background so it can notify you when you arrive nearby.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -440,6 +441,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "SpotShield uses the camera to scan vehicle license plates.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "SpotShield uses Face ID to protect access to your signed-in account.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SpotShield connects to the Firebase demo running on your Mac.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "SpotShield monitors active parking zones in the background so it can notify you when you arrive nearby.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SpotShield uses your location to show nearby parking zones.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

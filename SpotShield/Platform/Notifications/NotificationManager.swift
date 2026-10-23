@@ -9,13 +9,20 @@ import Foundation
 import Observation
 import UserNotifications
 
+struct ParkingZoneArrivalDestination: Equatable {
+    let zoneId: String
+    let userId: String
+}
+
 @MainActor
 @Observable
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
 
     var parkingSessionToOpen: String?
+    var parkingZoneToOpen: ParkingZoneArrivalDestination?
     private(set) var isParkingReminderUnavailable = false
+    private(set) var isZoneArrivalNotificationUnavailable = false
 
     private let center = UNUserNotificationCenter.current()
     private var signedInUserId: String?
@@ -36,15 +43,26 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             return
         }
 
+        let previousUserId = signedInUserId
+        let isFirstAccountUpdate = !hasLoadedAccount
         hasLoadedAccount = true
         signedInUserId = userId
         isParkingReminderUnavailable = false
+        isZoneArrivalNotificationUnavailable = false
         scheduledSessionId = nil
         reminderVersion = UUID()
         let version = reminderVersion
 
         Task {
             await clearParkingReminders(keepingUserId: userId, version: version)
+            if userId != nil || previousUserId != nil || !isFirstAccountUpdate {
+                await clearZoneArrivalNotifications(keepingUserId: userId)
+            }
+        }
+
+        if let destination = parkingZoneToOpen,
+           destination.userId != userId {
+            parkingZoneToOpen = nil
         }
     }
 
@@ -98,6 +116,69 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
 
         return allowed
+    }
+
+    func requestZoneArrivalPermission() async -> Bool {
+        let userId = signedInUserId
+        let allowed = await requestNotificationPermission()
+
+        if signedInUserId == userId {
+            isZoneArrivalNotificationUnavailable = !allowed
+        }
+
+        return allowed
+    }
+
+    func scheduleZoneArrivalNotification(
+        zoneId: String,
+        zoneName: String,
+        userId: String
+    ) async {
+        guard signedInUserId == userId else { return }
+
+        let settings = await center.notificationSettings()
+        guard signedInUserId == userId,
+              settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional
+                || settings.authorizationStatus == .ephemeral else {
+            isZoneArrivalNotificationUnavailable = true
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Parking zone nearby"
+        content.body = "You're near \(zoneName). Open the zone to review parking options."
+        content.sound = .default
+        content.userInfo = [
+            "parkingZoneId": zoneId,
+            "userId": userId
+        ]
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        center.removePendingNotificationRequests(withIdentifiers: ["zone-arrival-\(zoneId)"])
+        center.removeDeliveredNotifications(withIdentifiers: ["zone-arrival-\(zoneId)"])
+        let request = UNNotificationRequest(
+            identifier: "zone-arrival-\(zoneId)",
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await center.add(request)
+            if signedInUserId == userId {
+                isZoneArrivalNotificationUnavailable = false
+            } else {
+                center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+            }
+        } catch {
+            if signedInUserId == userId {
+                isZoneArrivalNotificationUnavailable = true
+            }
+        }
+    }
+
+    func cancelZoneArrivalNotifications(userId: String) async {
+        await clearZoneArrivalNotifications(keepingUserId: nil, onlyUserId: userId)
     }
 
     func scheduleParkingExpiryReminder(
@@ -251,6 +332,34 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         removeReminders(identifiers: identifiers)
     }
 
+    private func clearZoneArrivalNotifications(
+        keepingUserId: String? = nil,
+        onlyUserId: String? = nil
+    ) async {
+        let pending = await center.pendingNotificationRequests()
+        let delivered = await center.deliveredNotifications()
+        var identifiers: [String] = []
+
+        for request in pending + delivered.map({ $0.request }) {
+            guard request.identifier.hasPrefix("zone-arrival-") else {
+                continue
+            }
+
+            let requestUserId = request.content.userInfo["userId"] as? String
+            if let keepingUserId, requestUserId == keepingUserId {
+                continue
+            }
+
+            if let onlyUserId, requestUserId != onlyUserId {
+                continue
+            }
+
+            identifiers.append(request.identifier)
+        }
+
+        removeReminders(identifiers: identifiers)
+    }
+
     private func removeReminders(identifiers: [String]) {
         center.removePendingNotificationRequests(
             withIdentifiers: identifiers
@@ -264,7 +373,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        if notification.request.identifier.hasPrefix("parking-expiry-") {
+        if notification.request.identifier.hasPrefix("parking-expiry-")
+            || notification.request.identifier.hasPrefix("zone-arrival-") {
             guard let userId = notification.request.content.userInfo["userId"] as? String,
                   userId == signedInUserId else {
                 return []
@@ -281,15 +391,23 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let request = response.notification.request
 
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              request.identifier.hasPrefix("parking-expiry-"),
-              let sessionId = request.content.userInfo["parkingSessionId"] as? String,
-              !sessionId.isEmpty,
               let userId = request.content.userInfo["userId"] as? String,
               signedInUserId == nil || signedInUserId == userId else {
             return
         }
 
-        parkingSessionToOpen = sessionId
+        if request.identifier.hasPrefix("parking-expiry-"),
+           let sessionId = request.content.userInfo["parkingSessionId"] as? String,
+           !sessionId.isEmpty {
+            parkingSessionToOpen = sessionId
+        } else if request.identifier.hasPrefix("zone-arrival-"),
+                  let zoneId = request.content.userInfo["parkingZoneId"] as? String,
+                  !zoneId.isEmpty {
+            parkingZoneToOpen = ParkingZoneArrivalDestination(
+                zoneId: zoneId,
+                userId: userId
+            )
+        }
     }
 
     private func notificationsAreAllowed() async -> Bool {
@@ -298,6 +416,25 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         return settings.authorizationStatus == .authorized
             || settings.authorizationStatus == .provisional
             || settings.authorizationStatus == .ephemeral
+    }
+
+    private func requestNotificationPermission() async -> Bool {
+        let settings = await center.notificationSettings()
+
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .denied:
+            return false
+        case .notDetermined:
+            do {
+                return try await center.requestAuthorization(options: [.alert, .sound])
+            } catch {
+                return false
+            }
+        @unknown default:
+            return false
+        }
     }
 
     private func isCurrentReminder(version: UUID, userId: String) -> Bool {

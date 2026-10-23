@@ -11,34 +11,41 @@ import UIKit
 struct RoleNavigationView: View {
     let profile: UserProfile
     @Binding var parkingSessionId: String?
+    @Binding var parkingZoneId: String?
     @State private var selectedTab: AppTab
     @State private var parkingPath: [String] = []
     @State private var isKeyboardVisible = false
     @State private var isShowingAdminProfile = false
 
-    init(profile: UserProfile, parkingSessionId: Binding<String?>) {
+    init(
+        profile: UserProfile,
+        parkingSessionId: Binding<String?>,
+        parkingZoneId: Binding<String?>
+    ) {
         self.profile = profile
         _parkingSessionId = parkingSessionId
+        _parkingZoneId = parkingZoneId
         _selectedTab = State(initialValue: AppTab.tabs(for: profile.role)[0])
     }
 
     var body: some View {
-        Group {
-            switch profile.role {
-            case .motorist: motoristTabs
-            case .warden: wardenTabs
-            case .admin: adminTabs
+        VStack(spacing: 0) {
+            Group {
+                switch profile.role {
+                case .motorist: motoristTabs
+                case .warden: wardenTabs
+                case .admin: adminTabs
+                }
             }
-        }
-        .tabViewStyle(.tabBarOnly)
-        .background(AppColors.background.ignoresSafeArea())
-        .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .tabViewStyle(.tabBarOnly)
+
             if !isKeyboardVisible {
                 AppTabBar(tabs: AppTab.tabs(for: profile.role), selection: $selectedTab)
                     .background(AppColors.background)
             }
         }
+        .background(AppColors.background.ignoresSafeArea())
+        .scrollDismissesKeyboard(.interactively)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             isKeyboardVisible = true
         }
@@ -50,6 +57,12 @@ struct RoleNavigationView: View {
             selectedTab = .park
             parkingPath = [sessionId]
             parkingSessionId = nil
+        }
+        .onChange(of: parkingZoneId, initial: true) { _, zoneId in
+            guard profile.role == .motorist, let zoneId else { return }
+            selectedTab = .park
+            parkingPath = ["arrival-zone:\(zoneId)"]
+            parkingZoneId = nil
         }
         .sheet(isPresented: $isShowingAdminProfile) {
             NavigationStack {
@@ -69,9 +82,15 @@ struct RoleNavigationView: View {
         TabView(selection: $selectedTab) {
             NavigationStack(path: $parkingPath) {
                 MotoristHomeView(profile: profile)
-                    .navigationDestination(for: String.self) { sessionId in
-                        ParkingSetupView(profile: profile, expectedSessionId: sessionId)
-                            .id(sessionId)
+                    .navigationDestination(for: String.self) { destination in
+                        if destination.hasPrefix("arrival-zone:") {
+                            let zoneId = String(destination.dropFirst("arrival-zone:".count))
+                            ParkingZoneArrivalView(zoneId: zoneId)
+                                .id(destination)
+                        } else {
+                            ParkingSetupView(profile: profile, expectedSessionId: destination)
+                                .id(destination)
+                        }
                     }
             }
             .tabItem { Label("Park", systemImage: "parkingsign") }
