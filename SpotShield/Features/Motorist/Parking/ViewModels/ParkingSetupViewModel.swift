@@ -60,45 +60,7 @@ final class ParkingSetupViewModel {
         zone: ParkingZone,
         at time: Date = Date()
     ) -> [Int] {
-        guard zone.isPublished,
-              zone.isActive,
-              zone.openingHour >= 0,
-              zone.openingHour <= 23,
-              zone.closingHour > zone.openingHour,
-              zone.closingHour <= 24,
-              let closingTime = closingTime(
-                on: time,
-                hour: zone.closingHour,
-                timeZoneId: zone.timeZoneId
-              ),
-              let timeZone = TimeZone(identifier: zone.timeZoneId) else {
-            return []
-        }
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-
-        let currentHour = calendar.component(.hour, from: time)
-
-        guard currentHour >= zone.openingHour,
-              currentHour < zone.closingHour else {
-            return []
-        }
-
-        var durations: [Int] = []
-
-        for minutes in [30, 60, 120] {
-            let endTime = time.addingTimeInterval(
-                TimeInterval(minutes * 60)
-            )
-
-            if minutes <= zone.maximumStayMinutes,
-               endTime <= closingTime {
-                durations.append(minutes)
-            }
-        }
-
-        return durations
+        ParkingRules.availableDurations(for: zone, at: time)
     }
 
     func estimatedPrice(
@@ -112,7 +74,10 @@ final class ParkingSetupViewModel {
             return nil
         }
 
-        return parkingPrice(rate: zone.hourlyRateLKR, minutes: selectedMinutes)
+        return ParkingRules.price(
+            hourlyRateLKR: zone.hourlyRateLKR,
+            durationMinutes: selectedMinutes
+        )
     }
 
     func canStartParking(
@@ -134,35 +99,8 @@ final class ParkingSetupViewModel {
     }
 
     func extensionDurations(at time: Date = Date()) -> [Int] {
-        guard let session = activeSession,
-              session.isActive,
-              session.startTime <= time,
-              session.paidUntil > time,
-              let maximumMinutes = session.maximumStayMinutes,
-              let closingHour = session.closingHour,
-              let timeZoneId = session.timeZoneId,
-              let closingTime = closingTime(
-                on: session.startTime,
-                hour: closingHour,
-                timeZoneId: timeZoneId
-              ) else {
-            return []
-        }
-
-        var durations: [Int] = []
-
-        for minutes in [30, 60, 120] {
-            let newEndTime = session.paidUntil.addingTimeInterval(
-                TimeInterval(minutes * 60)
-            )
-
-            if minutes <= maximumMinutes - session.durationMinutes,
-               newEndTime <= closingTime {
-                durations.append(minutes)
-            }
-        }
-
-        return durations
+        guard let session = activeSession else { return [] }
+        return ParkingRules.extensionDurations(for: session, at: time)
     }
 
     func extensionPrice(at time: Date = Date()) -> Int? {
@@ -171,9 +109,9 @@ final class ParkingSetupViewModel {
             return nil
         }
 
-        return parkingPrice(
-            rate: session.hourlyRateLKR,
-            minutes: selectedExtensionMinutes
+        return ParkingRules.price(
+            hourlyRateLKR: session.hourlyRateLKR,
+            durationMinutes: selectedExtensionMinutes
         )
     }
 
@@ -609,35 +547,4 @@ final class ParkingSetupViewModel {
         return pendingOperationId
     }
 
-    private func parkingPrice(rate: Int, minutes: Int) -> Int? {
-        guard rate > 0, [30, 60, 120].contains(minutes) else {
-            return nil
-        }
-
-        if minutes == 30 {
-            return rate / 2 + rate % 2
-        }
-
-        let (price, overflow) = rate.multipliedReportingOverflow(by: minutes / 60)
-        return overflow ? nil : price
-    }
-
-    private func closingTime(
-        on date: Date,
-        hour: Int,
-        timeZoneId: String
-    ) -> Date? {
-        guard (1...24).contains(hour),
-              let timeZone = TimeZone(identifier: timeZoneId) else {
-            return nil
-        }
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        return calendar.date(
-            byAdding: .hour,
-            value: hour,
-            to: calendar.startOfDay(for: date)
-        )
-    }
 }

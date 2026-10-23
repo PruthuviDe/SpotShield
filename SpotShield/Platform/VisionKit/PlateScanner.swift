@@ -126,43 +126,23 @@ struct PlateScanner: UIViewControllerRepresentable {
         }
 
         private func composePlateText(from selectedText: RecognizedItem.Text) -> String {
-            let selectedBounds = rect(for: selectedText.bounds)
-            let minimumHeight = max(0.022, min(selectedBounds.height * 0.32, 0.075))
-            var nearbyTexts = recognizedTextItems.values.filter { text in
-                let bounds = rect(for: text.bounds)
-                return text.id == selectedText.id ||
-                    (bounds.height >= minimumHeight &&
-                     abs(bounds.midX - selectedBounds.midX) <= 0.65 &&
-                     abs(bounds.midY - selectedBounds.midY) <= 0.55)
-            }
-            if !nearbyTexts.contains(where: { $0.id == selectedText.id }) {
-                nearbyTexts.append(selectedText)
-            }
-
-            let tokens = nearbyTexts.flatMap { text -> [(value: String, category: Int, x: CGFloat, order: Int)] in
-                let bounds = rect(for: text.bounds)
-                return text.transcript
-                    .uppercased()
-                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
-                    .filter { !$0.isEmpty }
-                    .enumerated()
-                    .map { index, token in
-                        let category = token.allSatisfy(\.isLetter) ? 0 :
-                            (token.allSatisfy(\.isNumber) ? 2 : 1)
-                        return (token, category, bounds.midX, index)
-                    }
+            let selectedFragment = PlateTextFragment(
+                id: selectedText.id,
+                transcript: selectedText.transcript,
+                bounds: rect(for: selectedText.bounds)
+            )
+            let recognizedFragments = recognizedTextItems.values.map { text in
+                PlateTextFragment(
+                    id: text.id,
+                    transcript: text.transcript,
+                    bounds: rect(for: text.bounds)
+                )
             }
 
-            let composed = tokens
-                .sorted {
-                    if $0.category != $1.category { return $0.category < $1.category }
-                    if $0.x != $1.x { return $0.x < $1.x }
-                    return $0.order < $1.order
-                }
-                .map(\.value)
-                .joined(separator: " ")
-
-            return composed.isEmpty ? selectedText.transcript : composed
+            return PlateTextComposer.compose(
+                selected: selectedFragment,
+                recognizedFragments: recognizedFragments
+            )
         }
 
         private func rect(for bounds: RecognizedItem.Bounds) -> CGRect {
