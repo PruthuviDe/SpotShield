@@ -31,6 +31,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     private var isTracking = false
     private var signedInUserId: String?
     private var monitor: CLMonitor?
+    private var monitorInitializationTask: Task<CLMonitor, Never>?
     private var serviceSession: CLServiceSession?
     private var monitorTask: Task<Void, Never>?
     private var eventTask: Task<Void, Never>?
@@ -286,7 +287,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
         monitorTask = Task { [weak self] in
             guard let self else { return }
-            let activeMonitor = await CLMonitor(Self.monitorName)
+            let activeMonitor = await self.parkingZoneMonitor()
 
             guard !Task.isCancelled,
                   self.monitorVersion == version,
@@ -407,6 +408,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     private func disableArrivalAlerts(clearSavedZones: Bool) {
         monitorVersion = UUID()
+        let version = monitorVersion
         monitorTask?.cancel()
         eventTask?.cancel()
         diagnosticTask?.cancel()
@@ -414,7 +416,6 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         monitorTask = nil
         eventTask = nil
         diagnosticTask = nil
-        monitor = nil
         isRequestingArrivalAlerts = false
         arrivalAlertsMessage = "Arrival alerts are off."
         requiresAlwaysLocationSettings = false
@@ -425,13 +426,39 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         UserDefaults.standard.removeObject(forKey: Self.monitoredZonesKey)
         monitoredZones = []
 
-        Task {
-            let activeMonitor = await CLMonitor(Self.monitorName)
+        Task { [weak self] in
+            guard let self else { return }
+            let activeMonitor = await self.parkingZoneMonitor()
+            guard self.monitorVersion == version else { return }
             let identifiers = await activeMonitor.identifiers
             for identifier in identifiers where identifier.hasPrefix(Self.zoneIdentifierPrefix) {
+                guard self.monitorVersion == version else { return }
                 await activeMonitor.remove(identifier)
             }
         }
+    }
+
+    private func parkingZoneMonitor() async -> CLMonitor {
+        if let monitor {
+            return monitor
+        }
+
+        if let monitorInitializationTask {
+            let activeMonitor = await monitorInitializationTask.value
+            monitor = activeMonitor
+            self.monitorInitializationTask = nil
+            return activeMonitor
+        }
+
+        let initializationTask = Task {
+            await CLMonitor(Self.monitorName)
+        }
+        monitorInitializationTask = initializationTask
+
+        let activeMonitor = await initializationTask.value
+        monitor = activeMonitor
+        monitorInitializationTask = nil
+        return activeMonitor
     }
 
     private func eligibleZones(from zones: [ParkingZone], userId: String) -> [MonitoredParkingZone] {
