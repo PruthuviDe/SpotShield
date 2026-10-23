@@ -5,11 +5,13 @@
 //  Created by Pruthuvi de Silva on 2026-10-16.
 //
 
+import CoreLocation
 import SwiftUI
 
 struct MotoristParkingView: View {
     let profile: UserProfile
     @State private var viewModel = MotoristParkingViewModel()
+    @StateObject private var locationManager = LocationManager.shared
 
     var body: some View {
         ScrollView {
@@ -24,6 +26,9 @@ struct MotoristParkingView: View {
                         actionTitle: "Try Again",
                         action: { Task { await viewModel.loadZones() } }
                     )
+                }
+                if !viewModel.isLoading, viewModel.errorMessage.isEmpty, !viewModel.zones.isEmpty {
+                    locationStatus
                 }
                 if !viewModel.zones.isEmpty {
                     NavigationLink {
@@ -77,8 +82,85 @@ struct MotoristParkingView: View {
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Parking Zones")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { locationManager.requestLocationAccess() }
+        .onDisappear { locationManager.stopUpdatingLocation() }
         .refreshOnAppearAndForeground { await viewModel.loadZones() }
         .refreshable { await viewModel.loadZones() }
+    }
+
+    @ViewBuilder
+    private var locationStatus: some View {
+        let activeZones = viewModel.zones.filter(\.isActive)
+
+        if activeZones.isEmpty {
+            AppMessageView(
+                title: "No active parking zones",
+                message: "Check the zone list again later.",
+                appearance: .warning
+            )
+        } else {
+            switch locationManager.authorizationStatus {
+            case .notDetermined:
+                AppMessageView(
+                    title: "Finding your location",
+                    message: "Allow location access to see whether you are in an active zone. You can choose a zone manually.",
+                    appearance: .neutral
+                )
+            case .denied, .restricted:
+                AppMessageView(
+                    title: "Location is off",
+                    message: "Choose your parking zone manually.",
+                    appearance: .warning
+                )
+            case .authorizedAlways, .authorizedWhenInUse:
+                if locationManager.location == nil {
+                    AppMessageView(
+                        title: "Finding your location",
+                        message: locationManager.locationError ?? "Your zone status will appear here.",
+                        appearance: .neutral
+                    )
+                } else if zonesContainingCurrentLocation.count == 1,
+                          let zone = zonesContainingCurrentLocation.first {
+                    AppMessageView(
+                        title: "You’re in \(zone.name)",
+                        message: "Your current location is within this active parking zone.",
+                        appearance: .success
+                    )
+                } else if zonesContainingCurrentLocation.count > 1 {
+                    AppMessageView(
+                        title: "You’re in more than one zone",
+                        message: "Check the zone and rate before continuing.",
+                        appearance: .warning
+                    )
+                } else {
+                    AppMessageView(
+                        title: "You’re not in an active parking zone",
+                        message: "Choose the correct zone if you’re parked elsewhere.",
+                        appearance: .warning
+                    )
+                }
+            @unknown default:
+                AppMessageView(
+                    title: "Location is unavailable",
+                    message: "Choose your parking zone manually.",
+                    appearance: .neutral
+                )
+            }
+        }
+    }
+
+    private var zonesContainingCurrentLocation: [ParkingZone] {
+        guard let location = locationManager.location else { return [] }
+
+        return viewModel.zones.filter { zone in
+            guard zone.isActive else { return false }
+
+            let zoneLocation = CLLocation(
+                latitude: zone.latitude,
+                longitude: zone.longitude
+            )
+            return location.distance(from: zoneLocation) <= zone.radiusMeters
+        }
     }
 
     private func zoneCard(_ zone: ParkingZone) -> some View {
@@ -86,7 +168,12 @@ struct MotoristParkingView: View {
             VStack(alignment: .leading, spacing: AppSpacing.large) {
                 HStack(alignment: .top, spacing: AppSpacing.medium) {
                     VStack(alignment: .leading, spacing: AppSpacing.small) {
-                        AppStatusBadge(title: zone.isActive ? "Zone active" : "Unavailable", appearance: zone.isActive ? .success : .neutral)
+                        HStack(spacing: AppSpacing.small) {
+                            AppStatusBadge(title: zone.isActive ? "Zone active" : "Unavailable", appearance: zone.isActive ? .success : .neutral)
+                            if zonesContainingCurrentLocation.contains(where: { $0.id == zone.id }) {
+                                AppStatusBadge(title: "You’re in this zone", appearance: .success)
+                            }
+                        }
                         Text(zone.name)
                             .font(AppTypography.titleMedium)
                             .fixedSize(horizontal: false, vertical: true)

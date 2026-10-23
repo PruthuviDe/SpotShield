@@ -67,6 +67,109 @@ exports.addMotoristVehicle = onCall(async request => {
   });
 });
 
+exports.updateMyProfile = onCall(async request => {
+  const userId = request.auth?.uid;
+  const name = typeof request.data?.name === "string" ? request.data.name.trim() : "";
+  const hasLicensePlate = Object.prototype.hasOwnProperty.call(request.data ?? {}, "licensePlate");
+  const suppliedPlate = request.data?.licensePlate;
+  const plate = typeof suppliedPlate === "string" ? normalizePlate(suppliedPlate) : "";
+  if (!userId) throw new HttpsError("unauthenticated", "Please sign in first.");
+  if (!name || name.length > 100 ||
+      (hasLicensePlate && (typeof suppliedPlate !== "string" || (suppliedPlate.trim() && !plate))) ||
+      Object.keys(request.data ?? {}).some(key => !["name", "licensePlate"].includes(key))) {
+    throw new HttpsError("invalid-argument", "Enter a name and a valid vehicle number.");
+  }
+
+  const profileRef = database.collection("users").doc(userId);
+  const activeSessionRef = database.collection("activeParkingSessions").doc(userId);
+
+  return database.runTransaction(async transaction => {
+    const profile = await transaction.get(profileRef);
+    if (!profile.exists || !["Motorist", "Warden", "Admin"].includes(profile.get("role"))) {
+      throw new HttpsError("permission-denied", "This account cannot update its profile.");
+    }
+
+    const role = profile.get("role");
+    if (hasLicensePlate && role !== "Motorist") {
+      throw new HttpsError("permission-denied", "Only Motorists can update a vehicle number.");
+    }
+
+    const vehicleId = profile.get("primaryVehicleId") ?? "";
+    const vehicleRef = vehicleId ? database.collection("vehicles").doc(vehicleId) : null;
+    const vehicle = vehicleRef ? await transaction.get(vehicleRef) : null;
+    if (vehicleRef && (!vehicle.exists || vehicle.get("ownerUserId") !== userId)) {
+      throw new HttpsError("failed-precondition", "Your linked vehicle could not be verified.");
+    }
+
+    const previousPlate = vehicle?.get("licensePlate") ?? "";
+    const plateChanged = hasLicensePlate && plateKey(previousPlate) !== plateKey(plate);
+    if (hasLicensePlate && vehicleRef && !plate) {
+      throw new HttpsError("invalid-argument", "Enter a vehicle number.");
+    }
+
+    if (plateChanged) {
+      const activeSession = await transaction.get(activeSessionRef);
+      if (activeSession.exists) {
+        throw new HttpsError("failed-precondition", "End your active parking session before changing the vehicle number.");
+      }
+    }
+
+    if (hasLicensePlate && plate && plateChanged) {
+      await checkPlateAvailable(transaction, plate);
+    }
+
+    const previousPlateRef = previousPlate
+      ? database.collection("vehiclePlates").doc(plateKey(previousPlate))
+      : null;
+    const previousPlateRecord = previousPlateRef
+      ? await transaction.get(previousPlateRef)
+      : null;
+
+    let savedVehicleId = vehicleId || null;
+    if (hasLicensePlate && plate) {
+      if (!vehicleRef) {
+        const newVehicleRef = database.collection("vehicles").doc();
+        savedVehicleId = newVehicleRef.id;
+        transaction.create(newVehicleRef, {
+          ownerUserId: userId,
+          licensePlate: plate,
+          make: "",
+          model: ""
+        });
+        transaction.set(database.collection("vehiclePlates").doc(plateKey(plate)), {
+          ownerUserId: userId,
+          vehicleId: newVehicleRef.id,
+          licensePlate: plate
+        });
+      } else {
+        transaction.update(vehicleRef, { licensePlate: plate });
+        if (previousPlateRef && plateKey(previousPlate) !== plateKey(plate) &&
+            previousPlateRecord?.get("ownerUserId") === userId &&
+            previousPlateRecord?.get("vehicleId") === vehicleId) {
+          transaction.delete(previousPlateRef);
+        }
+        transaction.set(database.collection("vehiclePlates").doc(plateKey(plate)), {
+          ownerUserId: userId,
+          vehicleId: vehicleId,
+          licensePlate: plate
+        });
+      }
+    }
+
+    const profileUpdates = { name: name };
+    if (hasLicensePlate && savedVehicleId && savedVehicleId !== vehicleId) {
+      profileUpdates.primaryVehicleId = savedVehicleId;
+    }
+    transaction.update(profileRef, profileUpdates);
+
+    return {
+      userId: userId,
+      vehicleId: savedVehicleId,
+      licensePlate: hasLicensePlate && plate ? plate : previousPlate || null
+    };
+  });
+});
+
 async function checkPlateAvailable(transaction, plate) {
   const registry = await transaction.get(database.collection("vehiclePlates").doc(plateKey(plate)));
   const vehicle = await readPlateVehicle(transaction, plate);

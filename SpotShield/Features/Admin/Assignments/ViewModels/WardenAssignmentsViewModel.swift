@@ -60,6 +60,9 @@ final class WardenAssignmentsViewModel {
 
         let zoneId = selectedZoneId
         let wardenId = selectedWardenId
+        let updatesCurrentCoverage = zones.contains { zone in
+            zone.id == zoneId && zone.isPublished && zone.isActive
+        }
 
         guard zones.contains(where: { $0.id == zoneId }),
               wardens.contains(where: { $0.id == wardenId }) else {
@@ -101,7 +104,9 @@ final class WardenAssignmentsViewModel {
             )
 
             resetSelection()
-            successMessage = "Warden assigned successfully."
+            successMessage = updatesCurrentCoverage
+                ? "Warden assigned and current zone coverage updated."
+                : "Warden assigned successfully."
 
             await refreshAssignmentsAfterSave()
         } catch {

@@ -69,10 +69,9 @@ struct WardenRequestsView: View {
         .refreshable {
             await viewModel.loadRequests()
         }
-        .confirmationDialog(
+        .alert(
             "Review application",
             isPresented: $showReview,
-            titleVisibility: .visible,
             presenting: selectedRequest
         ) { request in
             Button("Approve Warden Access") {

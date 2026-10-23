@@ -40,6 +40,18 @@ final class WardenAssignmentRepository {
             throw WardenAssignmentError.missingDetails
         }
 
+        let zoneReference = database
+            .collection("parkingZones")
+            .document(parkingZoneId)
+        let zoneSnapshot = try await zoneReference.getDocument(source: .server)
+
+        guard let zoneData = zoneSnapshot.data() else {
+            throw WardenAssignmentError.missingDetails
+        }
+
+        let assignmentReference = database
+            .collection("wardenAssignments")
+            .document(assignmentId)
         let data: [String: Any] = [
             "parkingZoneId": parkingZoneId,
             "wardenUserId": wardenUserId,
@@ -48,10 +60,46 @@ final class WardenAssignmentRepository {
             "isActive": true
         ]
 
-        try await database
-            .collection("wardenAssignments")
-            .document(assignmentId)
-            .setData(data)
+        let batch = database.batch()
+        batch.setData(data, forDocument: assignmentReference)
+
+        if zoneData["isPublished"] as? Bool == true,
+           zoneData["isActive"] as? Bool == true {
+            guard let policyVersion = zoneData["policyVersion"] as? Int else {
+                throw WardenAssignmentError.missingDetails
+            }
+
+            if let currentAssignmentId = zoneData["wardenAssignmentId"] as? String,
+               currentAssignmentId != assignmentId {
+                let currentAssignmentReference = database
+                    .collection("wardenAssignments")
+                    .document(currentAssignmentId)
+                let currentAssignment = try await currentAssignmentReference.getDocument(source: .server)
+
+                if currentAssignment.exists,
+                   currentAssignment.data()?["isActive"] as? Bool == true,
+                   currentAssignment.data()?["endedAt"] == nil,
+                   currentAssignment.data()?["parkingZoneId"] as? String == parkingZoneId {
+                    batch.updateData(
+                        [
+                            "isActive": false,
+                            "endedAt": FieldValue.serverTimestamp()
+                        ],
+                        forDocument: currentAssignmentReference
+                    )
+                }
+            }
+
+            batch.updateData(
+                [
+                    "wardenAssignmentId": assignmentId,
+                    "policyVersion": policyVersion + 1
+                ],
+                forDocument: zoneReference
+            )
+        }
+
+        try await batch.commit()
     }
 
     func endAssignment(assignmentId: String) async throws {

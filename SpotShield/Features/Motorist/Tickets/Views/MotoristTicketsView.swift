@@ -49,13 +49,12 @@ struct MotoristTicketsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshOnAppearAndForeground { await viewModel.loadTickets() }
         .refreshable { await viewModel.loadTickets() }
-        .confirmationDialog(
+        .alert(
             "Pay LKR \(ticketToConfirm?.fineAmountLKR.formatted() ?? "0") from your wallet?",
             isPresented: Binding(
                 get: { ticketToConfirm != nil },
                 set: { if !$0 { ticketToConfirm = nil } }
-            ),
-            titleVisibility: .visible
+            )
         ) {
             if let ticket = ticketToConfirm {
                 Button("Confirm Payment") {

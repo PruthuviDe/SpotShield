@@ -92,10 +92,9 @@ struct ParkingZonesView: View {
         ) { zone in
             ParkingZoneFormView(zone: zone)
         }
-        .confirmationDialog(
+        .alert(
             "Confirm zone change",
             isPresented: $showZoneAction,
-            titleVisibility: .visible,
             presenting: zoneForAction
         ) { zone in
             if zone.isActive {

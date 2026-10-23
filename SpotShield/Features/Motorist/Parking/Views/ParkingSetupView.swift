@@ -92,24 +92,38 @@ struct ParkingSetupView: View {
         .onChange(of: viewModel.successMessage) { _, message in
             showActionFeedback(message, title: "Parking updated")
         }
-        .alert(actionFeedbackTitle, isPresented: $isShowingActionFeedback) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(actionFeedbackMessage)
-        }
-        .confirmationDialog("End parking?", isPresented: $isShowingEndConfirmation, titleVisibility: .visible) {
-            Button("End Parking", role: .destructive) {
-                Task {
-                    guard viewModel.activeSession?.id == sessionToEndId else {
-                        viewModel.parkingErrorMessage = "Your parking session changed. Refresh and check it before ending."
-                        return
+        .alert(
+            isShowingEndConfirmation ? "End parking?" : actionFeedbackTitle,
+            isPresented: Binding(
+                get: { isShowingEndConfirmation || isShowingActionFeedback },
+                set: { isPresented in
+                    if !isPresented {
+                        isShowingEndConfirmation = false
+                        isShowingActionFeedback = false
                     }
-                    await viewModel.endParking()
                 }
+            )
+        ) {
+            if isShowingEndConfirmation {
+                Button("End Parking", role: .destructive) {
+                    Task {
+                        guard viewModel.activeSession?.id == sessionToEndId else {
+                            viewModel.parkingErrorMessage = "Your parking session changed. Refresh and check it before ending."
+                            return
+                        }
+                        await viewModel.endParking()
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } else {
+                Button("OK", role: .cancel) { }
             }
-            Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Unused parking time will not be refunded.")
+            if isShowingEndConfirmation {
+                Text("Unused parking time will not be refunded.")
+            } else {
+                Text(actionFeedbackMessage)
+            }
         }
     }
 

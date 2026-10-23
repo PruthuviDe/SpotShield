@@ -35,6 +35,33 @@ final class UserProfileRepository {
             .call(["licensePlate": licensePlate])
     }
 
+    func updateMyProfile(
+        userId: String,
+        name: String,
+        licensePlate: String? = nil
+    ) async throws -> (vehicleId: String?, licensePlate: String?) {
+        var request: [String: Any] = ["name": name]
+        if let licensePlate {
+            request["licensePlate"] = licensePlate
+        }
+
+        let result = try await Functions.functions()
+            .httpsCallable("updateMyProfile")
+            .call(request)
+
+        guard let data = result.data as? [String: Any],
+              data["userId"] as? String == userId else {
+            throw NSError(domain: "Profile", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Could not confirm the profile update. Refresh your profile and try again."
+            ])
+        }
+
+        return (
+            vehicleId: data["vehicleId"] as? String,
+            licensePlate: data["licensePlate"] as? String
+        )
+    }
+
     func getWardens() async throws -> [UserProfile] {
         let result = try await database
             .collection("users")

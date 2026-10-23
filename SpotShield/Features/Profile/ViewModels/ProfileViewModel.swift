@@ -12,7 +12,7 @@ import UserNotifications
 @MainActor
 @Observable
 final class ProfileViewModel {
-    let profile: UserProfile
+    var profile: UserProfile
 
     private let repository = UserProfileRepository()
     private let wardenRepository = WardenObservationRepository()
@@ -34,9 +34,76 @@ final class ProfileViewModel {
     var isBiometricAvailable = false
     var isUpdatingBiometric = false
     var biometricError = ""
+    var editingName = ""
+    var editingLicensePlate = ""
+    private var originalEditingLicensePlate = ""
+    var isSavingProfile = false
+    var profileError = ""
 
     init(profile: UserProfile) {
         self.profile = profile
+    }
+
+    func beginProfileEditing() {
+        editingName = profile.name
+        editingLicensePlate = vehicle?.licensePlate ?? ""
+        originalEditingLicensePlate = editingLicensePlate
+        profileError = ""
+    }
+
+    func saveProfile() async -> Bool {
+        guard !isSavingProfile else { return false }
+
+        let name = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let licensePlate = editingLicensePlate.trimmingCharacters(in: .whitespacesAndNewlines)
+        let didEditLicensePlate = profile.role == .motorist
+            && licensePlate != originalEditingLicensePlate
+        guard !name.isEmpty, name.count <= 100 else {
+            profileError = "Enter a name under 100 characters."
+            return false
+        }
+        if didEditLicensePlate, licensePlate.isEmpty, profile.primaryVehicleId != nil {
+            profileError = "Enter your vehicle number."
+            return false
+        }
+
+        isSavingProfile = true
+        profileError = ""
+        defer { isSavingProfile = false }
+
+        do {
+            let update = try await repository.updateMyProfile(
+                userId: profile.id,
+                name: name,
+                licensePlate: didEditLicensePlate ? licensePlate : nil
+            )
+            profile.name = name
+
+            if profile.role == .motorist {
+                profile.primaryVehicleId = update.vehicleId
+                if let vehicleId = update.vehicleId,
+                   let savedPlate = update.licensePlate {
+                    vehicle = Vehicle(
+                        id: vehicleId,
+                        ownerUserId: profile.id,
+                        licensePlate: savedPlate,
+                        make: vehicle?.make ?? "",
+                        model: vehicle?.model ?? ""
+                    )
+                    vehicleMessage = ""
+                    vehicleError = ""
+                } else {
+                    vehicle = nil
+                    vehicleMessage = "No vehicle is linked to this account."
+                    vehicleError = ""
+                }
+            }
+
+            return true
+        } catch {
+            profileError = error.localizedDescription
+            return false
+        }
     }
 
     func load() async {

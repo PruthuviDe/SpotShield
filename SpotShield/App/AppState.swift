@@ -206,6 +206,16 @@ final class AppState {
         }
     }
 
+    func updateSignedInProfile(_ profile: UserProfile) {
+        guard auth.currentUser?.uid == profile.id,
+              case let .signedIn(currentProfile) = authState,
+              currentProfile.id == profile.id else {
+            return
+        }
+
+        authState = .signedIn(profile)
+    }
+
     func reauthenticateCurrentAccount(
         profile: UserProfile,
         password: String

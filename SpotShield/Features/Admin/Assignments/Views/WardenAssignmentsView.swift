@@ -40,10 +40,9 @@ struct WardenAssignmentsView: View {
         .refreshable {
             await viewModel.loadData()
         }
-        .confirmationDialog(
+        .alert(
             "End this assignment?",
             isPresented: $showEndConfirmation,
-            titleVisibility: .visible,
             presenting: selectedAssignment
         ) { assignment in
             Button("End Assignment", role: .destructive) {
@@ -146,7 +145,7 @@ struct WardenAssignmentsView: View {
                     )
                 }
 
-                Text("An assignment does not publish or activate the zone.")
+                Text("Assigning a Warden to an active zone updates its current coverage. Inactive zones must be activated separately.")
                     .font(AppTypography.caption)
                     .foregroundStyle(AppColors.textSecondary)
             }

@@ -137,6 +137,43 @@ test("parking enforcement, ticket payments, recovery and protected writes", { ti
       await seed("wallets/" + second.id, { userId: second.id, balanceLKR: 2000, autoDeductEnabled: false });
     });
 
+    await t.test("profile edits update names and keep vehicle plate ownership unique", async () => {
+      const driverProfileRef = database.doc("users/" + driver.id);
+      const originalVehicleId = (await driverProfileRef.get()).get("primaryVehicleId");
+
+      await call("updateMyProfile", driver, { name: "Updated Driver", licensePlate: unknownPlate });
+      let driverProfile = await driverProfileRef.get();
+      let vehicle = await database.doc("vehicles/" + originalVehicleId).get();
+      assert.equal(driverProfile.get("name"), "Updated Driver");
+      assert.equal(driverProfile.get("role"), "Motorist");
+      assert.equal(driverProfile.get("email"), driver.email);
+      assert.equal(vehicle.get("licensePlate"), unknownPlate);
+      assert.equal((await database.doc("vehiclePlates/" + plate).get()).exists, false);
+      assert.equal((await database.doc("vehiclePlates/" + unknownPlate).get()).get("vehicleId"), originalVehicleId);
+
+      await denied(() => call("updateMyProfile", driver, { name: "Updated Driver", licensePlate: secondPlate }), "ALREADY_EXISTS");
+      await denied(() => call("updateMyProfile", driver, { name: "   ", licensePlate: unknownPlate }), "INVALID_ARGUMENT");
+      await call("updateMyProfile", driver, { name: "Driver", licensePlate: plate });
+      driverProfile = await driverProfileRef.get();
+      vehicle = await database.doc("vehicles/" + originalVehicleId).get();
+      assert.equal(driverProfile.get("name"), "Driver");
+      assert.equal(vehicle.get("licensePlate"), plate);
+      assert.equal((await database.doc("vehiclePlates/" + unknownPlate).get()).exists, false);
+      assert.equal((await database.doc("vehiclePlates/" + plate).get()).get("vehicleId"), originalVehicleId);
+
+      await call("updateMyProfile", users[1], { name: "Updated Warden" });
+      await call("updateMyProfile", users[0], { name: "Updated Admin" });
+      const wardenProfile = await database.doc("users/" + users[1].id).get();
+      const adminProfile = await database.doc("users/" + users[0].id).get();
+      assert.equal(wardenProfile.get("name"), "Updated Warden");
+      assert.equal(wardenProfile.get("role"), "Warden");
+      assert.equal(adminProfile.get("name"), "Updated Admin");
+      assert.equal(adminProfile.get("role"), "Admin");
+
+      await denied(() => call("updateMyProfile", users[1], { name: "Updated Warden", licensePlate: plate }), "PERMISSION_DENIED");
+      await denied(() => call("updateMyProfile", null, { name: "No User" }), "UNAUTHENTICATED");
+    });
+
     let staleRequest;
     let sessionId;
     await t.test("unauthorized roles and unconfirmed reports are rejected; retry resolves the same case", async () => {
@@ -161,6 +198,7 @@ test("parking enforcement, ticket payments, recovery and protected writes", { ti
       const check = await call("checkParkingPlate", warden, { parkingZoneId: zoneId, licensePlate: plate });
       assert.equal(check.status, "Valid");
       assert.equal(check.canReport, false);
+      await denied(() => call("updateMyProfile", driver, { name: "Driver", licensePlate: unknownPlate }), "FAILED_PRECONDITION");
       await denied(() => call("submitWardenObservation", warden, reportRequest()), "FAILED_PRECONDITION");
       const review = await call("getObservationReview", admin, { observationId: staleRequest.operationId });
       assert.equal(review.canIssueTicket, false);

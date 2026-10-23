@@ -13,6 +13,7 @@ struct ProfileView: View {
     @Environment(\.openURL) private var openURL
     @State private var viewModel: ProfileViewModel
     @State private var isShowingSignOutConfirmation = false
+    @State private var isShowingProfileEditor = false
     private let onOpenWallet: (() -> Void)?
 
     init(profile: UserProfile, onOpenWallet: (() -> Void)? = nil) {
@@ -56,6 +57,9 @@ struct ProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshOnAppearAndForeground { await viewModel.load() }
         .refreshable { await viewModel.load() }
+        .sheet(isPresented: $isShowingProfileEditor) {
+            profileEditor
+        }
         .alert(
             "Sign out of SpotShield?",
             isPresented: $isShowingSignOutConfirmation,
@@ -72,7 +76,22 @@ struct ProfileView: View {
     private var accountCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: AppSpacing.small) {
-                AppSectionHeader(title: "Account")
+                HStack {
+                    Text("Account")
+                        .font(AppTypography.titleSmall)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Button {
+                        viewModel.beginProfileEditing()
+                        isShowingProfileEditor = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .font(AppTypography.bodyBold)
+                    .foregroundStyle(AppColors.accent)
+                    .accessibilityLabel("Edit profile")
+                }
+
                 Text(viewModel.profile.name)
                     .font(AppTypography.titleMedium)
 
@@ -83,6 +102,76 @@ struct ProfileView: View {
                 AppStatusBadge(title: viewModel.profile.role.title)
             }
         }
+    }
+
+    private var profileEditor: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppSpacing.large) {
+                    AppCard {
+                        VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                            VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                                Text("Name")
+                                    .font(AppTypography.bodyBold)
+                                TextField("Your name", text: $viewModel.editingName)
+                                    .textContentType(.name)
+                                    .textInputAutocapitalization(.words)
+                                    .textFieldStyle(AppTextFieldStyle())
+                            }
+
+                            if viewModel.profile.role == .motorist {
+                                VStack(alignment: .leading, spacing: AppSpacing.xSmall) {
+                                    Text("Vehicle number")
+                                        .font(AppTypography.bodyBold)
+                                    TextField("Enter vehicle number", text: $viewModel.editingLicensePlate)
+                                        .textInputAutocapitalization(.characters)
+                                        .autocorrectionDisabled()
+                                        .textFieldStyle(AppTextFieldStyle())
+                                }
+                            }
+
+                            if !viewModel.profileError.isEmpty {
+                                AppMessageView(
+                                    title: viewModel.profileError,
+                                    appearance: .error
+                                )
+                            }
+                        }
+                    }
+
+                    AppButton(
+                        title: "Save Changes",
+                        systemImage: "checkmark",
+                        isLoading: viewModel.isSavingProfile
+                    ) {
+                        Task {
+                            if await viewModel.saveProfile() {
+                                appState.updateSignedInProfile(viewModel.profile)
+                                isShowingProfileEditor = false
+                            }
+                        }
+                    }
+                    .disabled(viewModel.editingName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(AppSpacing.large)
+            }
+            .background(AppColors.background.ignoresSafeArea())
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") {
+                        isShowingProfileEditor = false
+                    }
+                    .disabled(viewModel.isSavingProfile)
+                }
+            }
+        }
+        .tint(AppColors.textPrimary)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private var vehicleSection: some View {

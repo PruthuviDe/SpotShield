@@ -57,7 +57,7 @@ struct WalletView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshOnAppearAndForeground { await viewModel.loadWallet() }
         .refreshable { await viewModel.loadWallet() }
-        .confirmationDialog("Enable automatic ticket payments?", isPresented: $showAutoDeductConfirmation, titleVisibility: .visible) {
+        .alert("Enable automatic ticket payments?", isPresented: $showAutoDeductConfirmation) {
             Button("Enable Auto-deduction") {
                 Task { await viewModel.setTicketAutoDeduct(enabled: true) }
             }

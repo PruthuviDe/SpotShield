@@ -875,6 +875,7 @@ exports.extendParking = onCall(async (request) => {
 const vehicleIdentity = require("./vehicleIdentity");
 exports.completeMotoristProfile = vehicleIdentity.completeMotoristProfile;
 exports.addMotoristVehicle = vehicleIdentity.addMotoristVehicle;
+exports.updateMyProfile = vehicleIdentity.updateMyProfile;
 
 const enforcement = require("./enforcement");
 exports.getWardenZones = enforcement.getWardenZones;
