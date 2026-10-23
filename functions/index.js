@@ -12,14 +12,6 @@ const database = getFirestore();
 const { isValidParkingId, normalizePlate, plateKey, readPlateVehicle, readPlateSessions, parkingPrice, parkingHours, checkWardenCoverage } = require("./parkingHelpers");
 
 
-exports.checkConnection = onCall((request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Please sign in first.");
-  }
-
-  return { message: "SpotShield backend is ready." };
-});
-
 exports.topUpWallet = onCall(async (request) => {
   const userId = request.auth?.uid;
   const amountLKR = request.data?.amountLKR;

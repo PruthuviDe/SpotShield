@@ -11,10 +11,8 @@ public enum AppSpacing {
     public static let xxLarge: CGFloat = 48
 
     // Corner radius tokens
-    public static let radiusSmall: CGFloat = 8
     public static let radiusButton: CGFloat = 12
     public static let radiusCard: CGFloat = 16
-    public static let radiusPill: CGFloat = 999
 
     // Minimum touch target size for accessibility
     public static let minTouchTarget: CGFloat = 44

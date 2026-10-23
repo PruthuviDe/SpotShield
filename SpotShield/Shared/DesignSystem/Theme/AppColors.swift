@@ -22,10 +22,6 @@ public enum AppColors {
         uiColor: UIColor(hex: 0xD7EE46)
     )
 
-    public static let accentPressed = Color(
-        uiColor: UIColor(hex: 0xC5DB3F)
-    )
-
     public static let accentBackground = adaptive(
         light: 0xF3F8D6,
         dark: 0x30371B

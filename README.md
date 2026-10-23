@@ -209,7 +209,7 @@ SpotShield/                         iOS app source
   Domain/                           Models, roles, and parking rules
   Data/Firebase/                    Firebase setup
   Data/Repositories/                Firestore data access
-  Services/                         Authentication service and service-layer files
+  Services/Authentication/          Sign-in, account creation, and password reset
   Features/                         Motorist, Warden, Admin, profile, and auth UI
   Platform/                         Biometrics, location, notifications, Live Activity, OCR
   Shared/DesignSystem/              Shared colors and UI components

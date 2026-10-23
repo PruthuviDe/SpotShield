@@ -1,5 +1,5 @@
 //
-//  SpotShieldLiveActivityLiveActivity.swift
+//  ParkingLiveActivity.swift
 //  SpotShieldLiveActivity
 //
 //  Created by Pruthuvi de Silva on 2026-10-20.
@@ -10,7 +10,7 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-struct SpotShieldLiveActivityLiveActivity: Widget {
+struct ParkingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ParkingActivityAttributes.self) { context in
             VStack(alignment: .leading, spacing: 12) {

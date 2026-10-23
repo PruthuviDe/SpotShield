@@ -1,5 +1,5 @@
 //
-//  Components.swift
+//  DesignSystemPreview.swift
 //  SpotShield
 //
 //  Created by Pruthuvi de Silva on 2026-10-21.

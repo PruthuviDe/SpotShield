@@ -79,7 +79,7 @@ final class WalletRepository {
         }
     }
 
-    func addDemoFunds(userId: String) async throws {
+    func topUpWallet(userId: String) async throws {
         guard !userId.isEmpty, !userId.contains("/") else {
             throw WalletError.invalidUserId
         }

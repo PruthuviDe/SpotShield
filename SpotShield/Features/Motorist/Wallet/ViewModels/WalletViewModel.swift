@@ -103,7 +103,7 @@ final class WalletViewModel {
         }
     }
 
-    func addDemoFunds() async {
+    func topUpWallet() async {
         guard !isAddingFunds, !isLoading, !isUpdatingAutoDeduct else { return }
 
         errorMessage = ""
@@ -115,7 +115,7 @@ final class WalletViewModel {
         }
 
         do {
-            try await repository.addDemoFunds(userId: profile.id)
+            try await repository.topUpWallet(userId: profile.id)
             successMessage = "LKR 1,000 added to your wallet."
             await refreshWallet(clearMessages: false)
         } catch {

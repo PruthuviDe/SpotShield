@@ -36,7 +36,7 @@ struct WalletView: View {
                 if let wallet = viewModel.wallet {
                     walletDetails(wallet)
                     AppButton(title: viewModel.isAddingFunds ? "Adding Funds…" : "Top Up LKR 1,000", systemImage: "plus", isLoading: viewModel.isAddingFunds) {
-                        Task { await viewModel.addDemoFunds() }
+                        Task { await viewModel.topUpWallet() }
                     }
                     .disabled(isBusy)
                     if !viewModel.successMessage.isEmpty {

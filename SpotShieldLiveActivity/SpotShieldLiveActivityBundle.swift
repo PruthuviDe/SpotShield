@@ -11,6 +11,6 @@ import SwiftUI
 @main
 struct SpotShieldLiveActivityBundle: WidgetBundle {
     var body: some Widget {
-        SpotShieldLiveActivityLiveActivity()
+        ParkingLiveActivity()
     }
 }
