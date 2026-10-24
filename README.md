@@ -259,3 +259,7 @@ The Simulator can simulate a location through **Features → Location**. Test no
 - Remote notifications, a production Firebase deployment, and an external payment provider are not configured.
 - Camera scanning depends on supported hardware and image quality. The Warden should confirm or correct the plate before checking it.
 - The `Documents/` folder is ignored by Git and may contain coursework notes and assessment materials that are not part of the app build.
+
+- **Module:** NB6009CEM
+- **Author:** W.P.N.S.M.D.SILVA
+- **Coventry ID:** 16602658 · **NIBM ID:** COBSCCOMP25.1P-016
